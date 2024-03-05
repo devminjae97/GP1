@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Xml.Linq;
+using TreeEditor;
 using Unity.VisualScripting.Antlr3.Runtime.Tree;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 using UnityEngine.U2D;
 using UnityEngine.XR;
 
@@ -27,14 +30,13 @@ public class MapGenerator : MonoBehaviour
     void GenerateMap()
     {
         InitializeMapTree();
-
-        bool isLeaf = false;
-        DevideNode(rootNode, 0, ref isLeaf);
+        DevideNode( rootNode, 0 );
+        GenerateRoad( rootNode, 0 );
     }
 
     void InitializeMapTree()
     {
-        rootNode = new MapNode(new RectInt(0, 0, mapSize.x, mapSize.y ) );
+        rootNode = new MapNode( new RectInt( 0, 0, mapSize.x, mapSize.y ) );
         DrawGrid( rootNode.rect.x, rootNode.rect.y );
     }
 
@@ -47,7 +49,7 @@ public class MapGenerator : MonoBehaviour
         grid.SetPosition( 3, new Vector2( x, y + mapSize.y ) - mapSize / 2 );
     }
 
-    void DrawLine(Vector2 from, Vector2 to)
+    void DrawLine( Vector2 from, Vector2 to )
     {
         LineRenderer line = Instantiate( lineRenderer ).GetComponent<LineRenderer>();
         line.SetPosition( 0, from - mapSize / 2 );
@@ -70,12 +72,11 @@ public class MapGenerator : MonoBehaviour
         line.SetPosition( 1, to - mapSize / 2 );
     }
 
-    void DevideNode(MapNode curNode, int depth, ref bool isLeafNode)
+    void DevideNode( MapNode curNode, int depth )
     {
         if (depth >= treeDepth)
         {
-            generateRoom( curNode );
-            isLeafNode = true;
+            GenerateRoom( curNode );
             return;
         }
 
@@ -85,48 +86,67 @@ public class MapGenerator : MonoBehaviour
             maxValue = curNode.rect.width - minNodeSize;
             if (maxValue < minNodeSize)
             {
-                generateRoom( curNode );
-                isLeafNode = true;
+                GenerateRoom( curNode );
                 return;
             }
             randomPos = Random.Range( minNodeSize, maxValue );
             curNode.left = new MapNode( new RectInt( curNode.rect.x, curNode.rect.y, randomPos, curNode.rect.height ) );
             curNode.right = new MapNode( new RectInt( curNode.rect.x + randomPos, curNode.rect.y, curNode.rect.width - randomPos, curNode.rect.height ) );
-            DrawLine( new Vector2( curNode.rect.x + randomPos, curNode.rect.y ), new Vector2( curNode.rect.x + randomPos, curNode.rect.y + curNode.rect.height ));
+            DrawLine( new Vector2( curNode.rect.x + randomPos, curNode.rect.y ), new Vector2( curNode.rect.x + randomPos, curNode.rect.y + curNode.rect.height ) );
         }
         else
         {
             maxValue = curNode.rect.height - minNodeSize;
             if (maxValue < minNodeSize)
             {
-                generateRoom( curNode );
-                isLeafNode = true;
+                GenerateRoom( curNode );
                 return;
             }
             randomPos = Random.Range( minNodeSize, maxValue );
             curNode.left = new MapNode( new RectInt( curNode.rect.x, curNode.rect.y, curNode.rect.width, randomPos ) );
             curNode.right = new MapNode( new RectInt( curNode.rect.x, curNode.rect.y + randomPos, curNode.rect.width, curNode.rect.height - randomPos ) );
-            DrawLine( new Vector2( curNode.rect.x, curNode.rect.y + randomPos ), new Vector2( curNode.rect.x + curNode.rect.width, curNode.rect.y + randomPos ));
+            DrawLine( new Vector2( curNode.rect.x, curNode.rect.y + randomPos ), new Vector2( curNode.rect.x + curNode.rect.width, curNode.rect.y + randomPos ) );
         }
         curNode.left.parent = curNode;
         curNode.right.parent = curNode;
 
-        bool isLeaf = false;
-        DevideNode( curNode.left, depth + 1, ref isLeaf );
-        DevideNode( curNode.right, depth + 1, ref isLeaf );
+        DevideNode( curNode.left, depth + 1 );
+        DevideNode( curNode.right, depth + 1 );
 
-        if (isLeaf)
-        {
-            DrawPassage(new Vector2 (curNode.right.rect.x + curNode.right.rect.width / 2, curNode.right.rect.y + curNode.right.rect.height / 2 ), new Vector2(curNode.left.rect.x + curNode.left.rect.width / 2, curNode.left.rect.y + curNode.left.rect.height / 2 ) );
-        }
+        //DrawPassage( new Vector2( curNode.right.rect.x + curNode.right.rect.width / 2, curNode.right.rect.y + curNode.right.rect.height / 2 ), new Vector2( curNode.left.rect.x + curNode.left.rect.width / 2, curNode.left.rect.y + curNode.left.rect.height / 2 ) );
     }
 
-    void generateRoom(MapNode curNode)
+    void GenerateRoom( MapNode curNode )
     {
         float width = Random.Range( curNode.rect.width * roomMinPadding, curNode.rect.width * roomMaxPadding );
         float height = Random.Range( curNode.rect.height * roomMinPadding, curNode.rect.height * roomMaxPadding );
         float widthPos = Random.Range( curNode.rect.x + 1, curNode.rect.x + curNode.rect.width - width - 1 );
         float heightPos = Random.Range( curNode.rect.y + 1, curNode.rect.y + curNode.rect.height - height - 1 );
+        curNode.roomRect = new RectInt( Mathf.RoundToInt( widthPos ), Mathf.RoundToInt( heightPos ), Mathf.RoundToInt( width ), Mathf.RoundToInt( height ) );
         DrawRoom( widthPos, heightPos, width, height, curNode );
+    }
+
+    private void GenerateRoad( MapNode treeNode, int n ) //길 연결
+    {
+        if (n == treeDepth) return; //노드가 최하위일 때는 길을 연결하지 않음, 최하위 노드는 자식 트리가 없기 때문
+        /*int x1 = GetCenterX( treeNode.left.roomRect ); //자식 트리의 던전 중앙 위치를 가져옴
+        int x2 = GetCenterX( treeNode.right.roomRect );
+        int y1 = GetCenterY( treeNode.left.roomRect );
+        int y2 = GetCenterY( treeNode.right.roomRect );*/
+
+        /*DrawPassage( new Vector2( x1, y1 ), new Vector2( x2, y2 ) ); //mapSize.x / 2를 빼는 이유는 화면 중앙에 맞추기 위함
+
+        GenerateRoad( treeNode.left, n + 1 );
+        GenerateRoad( treeNode.right, n + 1 );*/
+    }
+
+    private int GetCenterX( RectInt size )
+    {
+        return size.x + size.width / 2;
+    }
+
+    private int GetCenterY( RectInt size )
+    {
+        return size.y + size.height / 2;
     }
 }
