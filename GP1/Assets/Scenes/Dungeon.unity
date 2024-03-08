@@ -152,14 +152,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 275f9e153bdb81c429f03bc0f8247d80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  leftUp: {fileID: 3626916397498700004, guid: 490041c8ed1d3b846acae2f4895d5ed6, type: 3}
-  leftDown: {fileID: 3626916397498700004, guid: f9374c3b2f4cb304f8657d1e25fbaa60, type: 3}
-  rightUp: {fileID: 3626916397498700004, guid: b12f36c61257e4041b15c205955f29ca, type: 3}
-  rightDown: {fileID: 3626916397498700004, guid: 4196bc42ed53b7e4fa0e5a222b61f932, type: 3}
-  left: {fileID: 3626916397498700004, guid: cd2bd84a02f62ba4dada79da33a4fc89, type: 3}
-  right: {fileID: 3626916397498700004, guid: 24e6c00fd27c4ed45887a2ca1eb96c89, type: 3}
-  up: {fileID: 3626916397498700004, guid: bf9d80f0385b0fa408a501f0d08c4304, type: 3}
-  down: {fileID: 3626916397498700004, guid: a48661e4a8dd40c4eb28713d5a783a27, type: 3}
+  tileObj: {fileID: 4249417484201420168, guid: 0be66e9e0097ecf409afbc8a7addee50, type: 3}
+  leftUp: {fileID: -5668808390876728449, guid: 490041c8ed1d3b846acae2f4895d5ed6, type: 3}
+  leftDown: {fileID: -3995809517702826614, guid: f9374c3b2f4cb304f8657d1e25fbaa60, type: 3}
+  rightUp: {fileID: -5787937645911023666, guid: b12f36c61257e4041b15c205955f29ca, type: 3}
+  rightDown: {fileID: -9209432791005798506, guid: 4196bc42ed53b7e4fa0e5a222b61f932, type: 3}
+  left: {fileID: 4723320723789421913, guid: cd2bd84a02f62ba4dada79da33a4fc89, type: 3}
+  right: {fileID: -3611217689167261893, guid: 24e6c00fd27c4ed45887a2ca1eb96c89, type: 3}
+  up: {fileID: -2370015493903138362, guid: bf9d80f0385b0fa408a501f0d08c4304, type: 3}
+  down: {fileID: 1229986830279484878, guid: a48661e4a8dd40c4eb28713d5a783a27, type: 3}
+  normal: {fileID: 3610496136139590603, guid: 21e9066ef6fa8c74aadc7542fa902701, type: 3}
+  spriteSize: 10
 --- !u!4 &164504434
 Transform:
   m_ObjectHideFlags: 0
@@ -348,7 +351,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   roomDepth: 15
-  roomSize: 10
+  roomSize: 30
   gridRenderer: {fileID: 6597031852773372968, guid: 27120529c6a3df74eb8665829c2c3636, type: 3}
   lineRenderer: {fileID: 7628516241671104360, guid: f7f897d0161dc164fb08e8e8f6ef74ff, type: 3}
   tile: {fileID: 6553157700415584172, guid: 6927bf6268ced1548a0e5d9a5b1379fc, type: 3}

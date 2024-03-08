@@ -1,6 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
+
+public enum ETileType
+{
+    eNormal,
+    eLeftUp,
+    eRightUp,
+    eLeftDown,
+    eRightDown,
+    eLeft,
+    eRight,
+    eUp,
+    eDown,
+}
 
 public class RoomTypeManager : MonoBehaviour
 {
@@ -13,7 +27,7 @@ public class RoomTypeManager : MonoBehaviour
     };
     public Vector2Int[][] size2 = new Vector2Int[][]
     {
-        new Vector2Int[] { new Vector2Int( 0, 0 ), new Vector2Int( 0, 0 ) },
+        new Vector2Int[] { new Vector2Int( 0, 0 ), new Vector2Int( 0, 1 ) },
         new Vector2Int[] { new Vector2Int( 0, 0 ), new Vector2Int( 1, 0 ) },
         new Vector2Int[] { new Vector2Int( 0, 0 ), new Vector2Int( -1, 0 ) },
         new Vector2Int[] { new Vector2Int( 0, 0 ), new Vector2Int( 0, -1 ) },
@@ -38,17 +52,20 @@ public class RoomTypeManager : MonoBehaviour
     };
 
     public Vector2Int[][][] RoomTypes = new Vector2Int[4][][];
-    [SerializeField] private GameObject tile;
-    [SerializeField] private SpriteRenderer leftUp;
-    [SerializeField] private SpriteRenderer leftDown;
-    [SerializeField] private SpriteRenderer rightUp;
-    [SerializeField] private SpriteRenderer rightDown;
-    [SerializeField] private SpriteRenderer left;
-    [SerializeField] private SpriteRenderer right;
-    [SerializeField] private SpriteRenderer up;
-    [SerializeField] private SpriteRenderer down;
-    private int spriteSize = 5;
-    
+    [SerializeField] private GameObject tileObj;
+    [SerializeField] private Sprite leftUp;
+    [SerializeField] private Sprite leftDown;
+    [SerializeField] private Sprite rightUp;
+    [SerializeField] private Sprite rightDown;
+    [SerializeField] private Sprite left;
+    [SerializeField] private Sprite right;
+    [SerializeField] private Sprite up;
+    [SerializeField] private Sprite down;
+    [SerializeField] private Sprite normal;
+    [SerializeField] private int spriteSize = 10;
+    [SerializeField] private Dictionary<ETileType, Sprite> spriteDic;
+    SpriteRenderer spriteObj;
+
     private void Awake()
     {
         // ½Ì±ÛÅæ ÆÐÅÏ Àû¿ë
@@ -68,8 +85,16 @@ public class RoomTypeManager : MonoBehaviour
         RoomTypes[2] = size3; 
         RoomTypes[3] = size4;
 
-        if (leftUp != null)
-            spriteSize = (int)leftUp.size.x;
+        spriteDic = new Dictionary<ETileType, Sprite>() { 
+            { ETileType.eLeftUp, leftUp },
+            { ETileType.eRightUp, rightUp },
+            { ETileType.eLeftDown, leftDown },
+            { ETileType.eRightDown, rightDown },
+            { ETileType.eLeft, left },
+            { ETileType.eRight, right },
+            { ETileType.eUp, up },
+            { ETileType.eDown, down },
+            { ETileType.eNormal, normal }};
     }
 
     public static RoomTypeManager GetInstance()
@@ -83,13 +108,11 @@ public class RoomTypeManager : MonoBehaviour
         set { spriteSize = value; }
     }
 
-    public void SetTileMap(int blockSize, int blockType, Cell stdCell)
+    public void DrawTile( ETileType tileType, Vector2 pos )
     {
-        /*SpriteRenderer spriteObj;
-        if (blockSize == 1)
-        {
-            spriteObj = Instantiate( tile ).GetComponent<SpriteRenderer>();
-            sprite stdCell.posWorld.x
-        }*/
+        spriteObj = Instantiate( tileObj ).GetComponent<SpriteRenderer>();
+        spriteObj.sprite = spriteDic[tileType];
+        spriteObj.transform.position = new Vector3( pos.x, pos.y, 0 );
+        spriteObj.transform.localScale = new Vector2( spriteSize, spriteSize);
     }
 }

@@ -6,6 +6,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using static UnityEditor.PlayerSettings;
+using static UnityEditor.Progress;
 
 public class MapGeneratorIssac : MonoBehaviour
 {
@@ -26,14 +27,15 @@ public class MapGeneratorIssac : MonoBehaviour
     {
         InitMap();
         DrawGrid();
-        GenerateRoom( null, cellList[ cellList.GetLength( 1 ) / 2, cellList.GetLength( 0 ) / 2 ] );
+        GenerateRoom( cellList[ cellList.GetLength( 1 ) / 2, cellList.GetLength( 0 ) / 2 ] );
     }
 
     void InitMap()
     {
         // mapSize: map의 크기
         // cellList: cell의 가로 개수 * cell의 세로 개수 (총 cell 개수)
-        //roomSize = RoomTypeManager.GetInstance().SpriteSize * 2;
+        roomSize = RoomTypeManager.GetInstance().SpriteSize;
+        Debug.Log(roomSize);
         mapSize = new Vector2Int( roomDepth * roomSize * 4, roomDepth * roomSize * 4 );
         cellList = new Cell[roomDepth * 4, roomDepth * 4];
         for (int i = 0; i < roomDepth * 4; i++)
@@ -74,12 +76,12 @@ public class MapGeneratorIssac : MonoBehaviour
      * pos: room's left down pos
      * isSpecialRoom: start or boss room
      */
-    void GenerateRoom( Cell prevCell, Cell curCell )
+    void GenerateRoom( Cell curCell )
     {
         if (roomCount > roomDepth)
             return;
 
-        (bool, List<Cell>) checkRoomResult = CheckValidRoom( curCell );
+        (bool, List<Cell>, int, int) checkRoomResult = CheckValidRoom( curCell );
 
         if (checkRoomResult.Item1 == false) 
             return;
@@ -117,17 +119,73 @@ public class MapGeneratorIssac : MonoBehaviour
             }
         }
         roomCount++;
+        SetTileMap(checkRoomResult.Item2);
 
         // 주변 사용하지 않은 cell 탐색
-        HashSet<(Cell, Cell)> nearCells = GetNearCells( checkRoomResult.Item2 );
-        foreach ((Cell, Cell) cellPos in nearCells)
+        HashSet<Cell> nearCells = GetNearCells( checkRoomResult.Item2 );
+        foreach (Cell cellPos in nearCells)
         {
-            GenerateRoom( cellPos.Item1, cellPos.Item2 );
+            GenerateRoom(cellPos );
             if (roomCount > roomDepth)
             {
                 return;
             }
         }
+    }
+
+    void SetTileMap( List<Cell> cells )
+    {
+        bool rOk, lOk, uOk, dOk;
+        int rx, ry, lx, ly, ux, uy, dx, dy;
+        Vector2 targetPos;
+        foreach (Cell cell in cells)
+        {
+            dx = cell.pos.x + xdir[0];
+            dy = cell.pos.y + ydir[0];
+            ux = cell.pos.x + xdir[1];
+            uy = cell.pos.y + ydir[1];
+            rx = cell.pos.x + xdir[2];
+            ry = cell.pos.y + ydir[2];
+            lx = cell.pos.x + xdir[3];
+            ly = cell.pos.y + ydir[3];
+            rOk = 0 <= rx && rx < cellList.GetLength( 1 ) && 0 <= ry && ry < cellList.GetLength( 0 ) && cellList[rx, ry].id == cell.id;
+            lOk = 0 <= lx && lx < cellList.GetLength( 1 ) && 0 <= ly && ly < cellList.GetLength( 0 ) && cellList[lx, ly].id == cell.id;
+            uOk = 0 <= ux && ux < cellList.GetLength( 1 ) && 0 <= uy && uy < cellList.GetLength( 0 ) && cellList[ux, uy].id == cell.id;
+            dOk = 0 <= dx && dx < cellList.GetLength( 1 ) && 0 <= dy && dy < cellList.GetLength( 0 ) && cellList[dx, dy].id == cell.id;
+
+            // right up
+            targetPos = new Vector2( cell.posWorld.x + roomSize / 2, cell.posWorld.y + roomSize / 2 );
+            if (rOk && uOk) DrawTile( ETileType.eNormal, targetPos );
+            else if (rOk && !uOk) DrawTile( ETileType.eUp, targetPos );
+            else if (!rOk && uOk) DrawTile( ETileType.eRight, targetPos );
+            else if (!rOk && !uOk) DrawTile( ETileType.eRightUp, targetPos );
+
+            // right down
+            targetPos = new Vector2( cell.posWorld.x + roomSize / 2, cell.posWorld.y );
+            if (rOk && dOk) DrawTile( ETileType.eNormal, targetPos );
+            else if (rOk && !dOk) DrawTile( ETileType.eDown, targetPos );
+            else if (!rOk && dOk) DrawTile( ETileType.eRight, targetPos );
+            else if (!rOk && !dOk) DrawTile( ETileType.eRightDown, targetPos );
+
+            // left up
+            targetPos = new Vector2( cell.posWorld.x, cell.posWorld.y + roomSize / 2 );
+            if (lOk && uOk) DrawTile( ETileType.eNormal, targetPos );
+            else if (lOk && !uOk) DrawTile( ETileType.eUp, targetPos );
+            else if (!lOk && uOk) DrawTile( ETileType.eLeft, targetPos );
+            else if (!lOk && !uOk) DrawTile( ETileType.eLeftUp, targetPos );
+
+            // left down
+            targetPos = new Vector2( cell.posWorld.x, cell.posWorld.y);
+            if (lOk && dOk) DrawTile( ETileType.eNormal, targetPos );
+            else if (lOk && !dOk) DrawTile( ETileType.eDown, targetPos );
+            else if (!lOk && dOk) DrawTile( ETileType.eLeft, targetPos );
+            else if (!lOk && !dOk) DrawTile( ETileType.eLeftDown, targetPos );
+        }
+    }
+
+    void DrawTile( ETileType tileType, Vector2 pos )
+    {
+        RoomTypeManager.GetInstance().DrawTile( tileType, pos );
     }
 
     void GenerateDoor( Cell prevCell, Cell postCell )
@@ -162,7 +220,7 @@ public class MapGeneratorIssac : MonoBehaviour
         groundSprite.transform.position = (prevCell.posWorld + postCell.posWorld) / 2;
     }
 
-    (bool, List<Cell>) CheckValidRoom( Cell cell )
+    (bool, List<Cell>, int, int) CheckValidRoom( Cell cell )
     {
         bool canGenerate;
         int x, y;
@@ -208,18 +266,17 @@ public class MapGeneratorIssac : MonoBehaviour
                 }
                 if (canGenerate)
                 {
-                    // test용으로 sprite붙여보자
-                    return (true, posList);
+                    return (true, posList, currentRoomSize, currentRoomType);
                 }
             }
         }
-        return (false, posList);
+        return (false, posList, -1, -1);
     }
 
     // (기준, 인접)
-    HashSet<(Cell, Cell)> GetNearCells( List<Cell> suburbCellList )
+    HashSet<Cell> GetNearCells( List<Cell> suburbCellList )
     {
-        HashSet<(Cell, Cell)> nearCells = new HashSet<(Cell, Cell)>();
+        HashSet<Cell> nearCells = new HashSet<Cell>();
         suburbCellList = ShuffleList<Cell>( suburbCellList );
         foreach (Cell curPos in suburbCellList)
         {
@@ -228,7 +285,7 @@ public class MapGeneratorIssac : MonoBehaviour
                 int x = curPos.pos.x + xdir[i];
                 int y = curPos.pos.y + ydir[i];
                 if (x < 0 || x >= mapSize.x || y < 0 || y >= mapSize.y || cellList[x, y].isChecked) continue;
-                nearCells.Add( (curPos, cellList[x, y]) );
+                nearCells.Add( cellList[x, y] );
             }
         }
         return nearCells;
