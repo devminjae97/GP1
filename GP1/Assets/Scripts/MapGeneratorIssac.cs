@@ -10,17 +10,22 @@ using static UnityEditor.Progress;
 
 public class MapGeneratorIssac : MonoBehaviour
 {
+    private float tileSizePerCell;
+    private int roomCount = 1;
+    // 오른쪽, 왼쪽, 아래, 위, 왼쪽아래, 오른쪽아래, 왼쪽위, 오른쪽위
+    private int[] xdir = new int[] { 0, 0, 1, -1, 1, 1, -1, -1 };
+    private int[] ydir = new int[] { 1, -1, 0, 0, -1, 1, -1, 1 };
     [SerializeField] private int roomDepth = 10;
-    [SerializeField] private int roomSize = 30;
+    [SerializeField] private int cellSize = 30;
+    [SerializeField, Tooltip("cellSize % tileNumPerCell == 0")] private int tileNumPerCell = 30;
     [SerializeField] private GameObject gridRenderer;
     [SerializeField] private GameObject lineRenderer;
     [SerializeField] private GameObject tile;
+    [SerializeField] private GameObject door;
+    [SerializeField] private GameObject tileBase;
+    [SerializeField] private Cell[,] cellList;
     private SpriteRenderer groundSprite;
     private Vector2Int mapSize;
-    private int[] xdir = new int[] { 0, 0, 1, -1 };
-    private int[] ydir = new int[] { 1, -1, 0, 0 };
-    private Cell[,] cellList;
-    private int roomCount = 1;
 
     // Start is called before the first frame update
     void Start()
@@ -32,17 +37,15 @@ public class MapGeneratorIssac : MonoBehaviour
 
     void InitMap()
     {
-        // mapSize: map의 크기
-        // cellList: cell의 가로 개수 * cell의 세로 개수 (총 cell 개수)
-        roomSize = RoomTypeManager.GetInstance().SpriteSize;
-        Debug.Log(roomSize);
-        mapSize = new Vector2Int( roomDepth * roomSize * 4, roomDepth * roomSize * 4 );
-        cellList = new Cell[roomDepth * 4, roomDepth * 4];
-        for (int i = 0; i < roomDepth * 4; i++)
+        int cellNum = roomDepth * 4;
+        mapSize = new Vector2Int( cellNum * cellSize, cellNum * cellSize );
+        cellList = new Cell[cellNum, cellNum];
+        tileSizePerCell = cellSize / tileNumPerCell;
+        for (int i = 0; i < cellNum; i++)
         {
-            for (int j = 0; j < roomDepth * 4; j++)
+            for (int j = 0; j < cellNum; j++)
             {
-                cellList[i, j] = new Cell( new Vector2Int( i, j ), new Vector2( -mapSize.x / 2 + i * roomSize + roomSize / 2, mapSize.y / 2 - j * roomSize + roomSize / 2 ) );
+                cellList[i, j] = new Cell( new Vector2Int( i, j ), new Vector2( -mapSize.x / 2 + j * cellSize, mapSize.y / 2 - i * cellSize  ) );
             }
         }
     }
@@ -56,7 +59,7 @@ public class MapGeneratorIssac : MonoBehaviour
         grid.SetPosition( 2, new Vector2( mapSize.x, mapSize.y ) - mapSize / 2 );
         grid.SetPosition( 3, new Vector2( 0, mapSize.y ) - mapSize / 2 );
 
-        for (int i = roomSize; i < mapSize.x; i += roomSize)
+        for (int i = cellSize; i < mapSize.x; i += cellSize)
         {
             int pos = -mapSize.x / 2 + i;
             DrawLine( new Vector2( pos, -mapSize.y / 2 ), new Vector2( pos, mapSize.y / 2 ) );
@@ -76,45 +79,44 @@ public class MapGeneratorIssac : MonoBehaviour
      * pos: room's left down pos
      * isSpecialRoom: start or boss room
      */
-    void GenerateRoom( Cell curCell )
+    void GenerateRoom( Cell stdCell )
     {
+        int nx, ny;
+
         if (roomCount > roomDepth)
             return;
 
-        (bool, List<Cell>, int, int) checkRoomResult = CheckValidRoom( curCell );
+        (bool, List<Cell>) checkRoomResult = CheckValidRoom( stdCell );
 
         if (checkRoomResult.Item1 == false) 
             return;
 
-        // test: 기준 방 확인용
-        groundSprite = Instantiate( tile ).GetComponent<SpriteRenderer>();
-        groundSprite.color = Color.yellow;
-        groundSprite.transform.localScale = new Vector3( 1, 1, 0 );
-        groundSprite.transform.position = new Vector3( curCell.posWorld.x, curCell.posWorld.y, 0 );
+        DrawTestStdCell(stdCell);
 
-        foreach (Cell cellPos in checkRoomResult.Item2)
+        foreach (Cell cell in checkRoomResult.Item2)
         {
-            cellList[cellPos.pos.x, cellPos.pos.y].isChecked = true;
-            cellList[cellPos.pos.x, cellPos.pos.y].id = roomCount;
+            InitTilesOfCell( cell );
+            DrawTestCells( cell );
 
-            groundSprite = Instantiate( tile ).GetComponent<SpriteRenderer>();
-            groundSprite.transform.position = new Vector3( cellPos.posWorld.x, cellPos.posWorld.y, 0 );
-            groundSprite.transform.localScale = new Vector3( roomSize, roomSize, 0 );
-            groundSprite.color = new Color( roomCount * (1 / (float)roomDepth), roomCount * (1 / (float)roomDepth), roomCount * (1 / (float)roomDepth) );
-            groundSprite.sortingOrder = -3;
+            cell.isChecked = true;
+            cell.id = roomCount;
 
             for (int i = 0; i < 4; i++)
             {
-                int nx = cellPos.pos.x + xdir[i];
-                int ny = cellPos.pos.y + ydir[i];
-                if (0 < nx && nx <= cellList.GetLength(1) && 0 < ny && ny <= cellList.GetLength( 0 ) && cellList[nx, ny].id != cellPos.id)
+                nx = cell.pos.x + xdir[i];
+                ny = cell.pos.y + ydir[i];
+                if (0 < nx && nx <= cellList.GetLength(1) && 0 < ny && ny <= cellList.GetLength( 0 ) && cellList[nx, ny].id != cell.id && cellList[nx, ny].id != 0)
                 {
-                    if (cellPos.IsInjected( cellList[nx, ny].id ) || cellList[nx, ny].id == 0)
-                        continue;
+                    if (cell.IsInjected( cellList[nx, ny].id ))
+                        continue;     
 
-                    cellPos.injectedCellList.Add( cellList[nx, ny].id );
-                    cellList[nx, ny].injectedCellList.Add( cellPos.id );
-                    GenerateDoor( cellPos, cellList[nx, ny] );
+                    cell.injectedCellList.Add( cellList[nx, ny].id );
+                    cellList[nx, ny].injectedCellList.Add( cell.id );
+
+                    if (i == 0) GenerateDoor( cell, cellList[nx, ny], i );
+                    else if (i == 1) GenerateDoor( cellList[nx, ny], cell, i );
+                    else if (i == 2) GenerateDoor( cell, cellList[nx, ny], i );
+                    else if (i == 3) GenerateDoor( cellList[nx, ny], cell, i );
                 }
             }
         }
@@ -123,124 +125,210 @@ public class MapGeneratorIssac : MonoBehaviour
 
         // 주변 사용하지 않은 cell 탐색
         HashSet<Cell> nearCells = GetNearCells( checkRoomResult.Item2 );
-        foreach (Cell cellPos in nearCells)
+        foreach (Cell cell in nearCells)
         {
-            GenerateRoom(cellPos );
+            GenerateRoom(cell );
             if (roomCount > roomDepth)
-            {
                 return;
+        }
+    }
+
+    void DrawTestStdCell(Cell cell)
+    {
+        groundSprite = Instantiate( tile ).GetComponent<SpriteRenderer>();
+        groundSprite.color = Color.yellow;
+        groundSprite.transform.localScale = new Vector3( 1, 1, 0 );
+        groundSprite.transform.position = new Vector3( cell.posWorld.x, cell.posWorld.y, 0 );
+    }
+
+    void DrawTestCells(Cell cell)
+    {
+        groundSprite = Instantiate( tile ).GetComponent<SpriteRenderer>();
+        groundSprite.transform.position = cell.posWorld;
+        groundSprite.transform.localScale = new Vector3( cellSize, cellSize, 0 );
+        groundSprite.color = new Color( roomCount * (1 / (float)roomDepth), roomCount * (1 / (float)roomDepth), roomCount * (1 / (float)roomDepth) );
+        groundSprite.sortingOrder = -3;
+    }
+
+    void InitTilesOfCell(Cell cell)
+    {
+        cell.tiles = new GameObject[tileNumPerCell, tileNumPerCell];
+        for (int i = 0; i < tileNumPerCell; i++)
+        {
+            for (int j = 0; j < tileNumPerCell; j++)
+            {
+                cell.tiles[i, j] = Instantiate( tileBase );
+                cell.tiles[i, j].GetComponent<TileBase>().posWorld = new Vector2( cell.posWorld.x - cellSize / 2 + j * tileSizePerCell, cell.posWorld.y + cellSize / 2 - i * tileSizePerCell );
+                cell.tiles[i, j].GetComponent<TileBase>().Scale = tileSizePerCell;
             }
         }
     }
 
     void SetTileMap( List<Cell> cells )
     {
-        bool rOk, lOk, uOk, dOk;
-        int rx, ry, lx, ly, ux, uy, dx, dy;
-        Vector2 targetPos;
+        bool rOk, lOk, uOk, dOk, ldOk, rdOk, luOk, ruOk;
+        int rx, ry, lx, ly, ux, uy, dx, dy, ldx, ldy, rdx, rdy, lux, luy, rux, ruy;
         foreach (Cell cell in cells)
-        {
-            dx = cell.pos.x + xdir[0];
-            dy = cell.pos.y + ydir[0];
-            ux = cell.pos.x + xdir[1];
-            uy = cell.pos.y + ydir[1];
-            rx = cell.pos.x + xdir[2];
-            ry = cell.pos.y + ydir[2];
-            lx = cell.pos.x + xdir[3];
-            ly = cell.pos.y + ydir[3];
+        { 
+            rx = cell.pos.x + xdir[0];
+            ry = cell.pos.y + ydir[0];
+            lx = cell.pos.x + xdir[1];
+            ly = cell.pos.y + ydir[1];
+            dx = cell.pos.x + xdir[2];
+            dy = cell.pos.y + ydir[2];
+            ux = cell.pos.x + xdir[3];
+            uy = cell.pos.y + ydir[3];
+            ldx = cell.pos.x + xdir[4];
+            ldy = cell.pos.y + ydir[4];
+            rdx = cell.pos.x + xdir[5];
+            rdy = cell.pos.y + ydir[5];
+            lux = cell.pos.x + xdir[6];
+            luy = cell.pos.y + ydir[6];
+            rux = cell.pos.x + xdir[7];
+            ruy = cell.pos.y + ydir[7];
+
             rOk = 0 <= rx && rx < cellList.GetLength( 1 ) && 0 <= ry && ry < cellList.GetLength( 0 ) && cellList[rx, ry].id == cell.id;
             lOk = 0 <= lx && lx < cellList.GetLength( 1 ) && 0 <= ly && ly < cellList.GetLength( 0 ) && cellList[lx, ly].id == cell.id;
             uOk = 0 <= ux && ux < cellList.GetLength( 1 ) && 0 <= uy && uy < cellList.GetLength( 0 ) && cellList[ux, uy].id == cell.id;
             dOk = 0 <= dx && dx < cellList.GetLength( 1 ) && 0 <= dy && dy < cellList.GetLength( 0 ) && cellList[dx, dy].id == cell.id;
+            ldOk = 0 <= ldx && ldx < cellList.GetLength( 1 ) && 0 <= ldy && ldy < cellList.GetLength( 0 ) && cellList[ldx, ldy].id == cell.id;
+            rdOk = 0 <= rdx && rdx < cellList.GetLength( 1 ) && 0 <= rdy && rdy < cellList.GetLength( 0 ) && cellList[rdx, rdy].id == cell.id;
+            luOk = 0 <= lux && lux < cellList.GetLength( 1 ) && 0 <= luy && luy < cellList.GetLength( 0 ) && cellList[lux, luy].id == cell.id;
+            ruOk = 0 <= rux && rux < cellList.GetLength( 1 ) && 0 <= ruy && ruy < cellList.GetLength( 0 ) && cellList[rux, ruy].id == cell.id;
 
             // right up
-            targetPos = new Vector2( cell.posWorld.x + roomSize / 2, cell.posWorld.y + roomSize / 2 );
-            if (rOk && uOk) DrawTile( ETileType.eNormal, targetPos );
-            else if (rOk && !uOk) DrawTile( ETileType.eUp, targetPos );
-            else if (!rOk && uOk) DrawTile( ETileType.eRight, targetPos );
-            else if (!rOk && !uOk) DrawTile( ETileType.eRightUp, targetPos );
+            if (rOk && uOk)
+            {
+                if (ruOk) DrawGround( ETileType.eNormal, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+                else DrawWall( ETileType.eUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+            }
+            else if (rOk && !uOk) DrawWall( ETileType.eUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+            else if (!rOk && uOk) DrawWall( ETileType.eRight, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+            else if (!rOk && !uOk) DrawWall( ETileType.eRightUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
 
             // right down
-            targetPos = new Vector2( cell.posWorld.x + roomSize / 2, cell.posWorld.y );
-            if (rOk && dOk) DrawTile( ETileType.eNormal, targetPos );
-            else if (rOk && !dOk) DrawTile( ETileType.eDown, targetPos );
-            else if (!rOk && dOk) DrawTile( ETileType.eRight, targetPos );
-            else if (!rOk && !dOk) DrawTile( ETileType.eRightDown, targetPos );
+            if (rOk && dOk)
+            {
+                if (rdOk) DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+                else DrawWall( ETileType.eUp, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+            }
+            else if (rOk && !dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+            else if (!rOk && dOk) DrawWall( ETileType.eRight, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+            else if (!rOk && !dOk) DrawWall( ETileType.eRightDown, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
 
             // left up
-            targetPos = new Vector2( cell.posWorld.x, cell.posWorld.y + roomSize / 2 );
-            if (lOk && uOk) DrawTile( ETileType.eNormal, targetPos );
-            else if (lOk && !uOk) DrawTile( ETileType.eUp, targetPos );
-            else if (!lOk && uOk) DrawTile( ETileType.eLeft, targetPos );
-            else if (!lOk && !uOk) DrawTile( ETileType.eLeftUp, targetPos );
+            if (lOk && uOk)
+            {
+                if (luOk) DrawGround( ETileType.eNormal, cell.tiles[0, 0], tileSizePerCell );
+                else DrawWall( ETileType.eUp, cell.tiles[0, 0], tileSizePerCell );
+            }
+            else if (lOk && !uOk) DrawWall( ETileType.eUp, cell.tiles[0, 0], tileSizePerCell );
+            else if (!lOk && uOk) DrawWall( ETileType.eLeft, cell.tiles[0, 0], tileSizePerCell );
+            else if (!lOk && !uOk) DrawWall( ETileType.eLeftUp, cell.tiles[0, 0], tileSizePerCell );
 
             // left down
-            targetPos = new Vector2( cell.posWorld.x, cell.posWorld.y);
-            if (lOk && dOk) DrawTile( ETileType.eNormal, targetPos );
-            else if (lOk && !dOk) DrawTile( ETileType.eDown, targetPos );
-            else if (!lOk && dOk) DrawTile( ETileType.eLeft, targetPos );
-            else if (!lOk && !dOk) DrawTile( ETileType.eLeftDown, targetPos );
+            if (lOk && dOk)
+            {
+                if (ldOk) DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+                else DrawWall( ETileType.eUp, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+            }
+            else if (lOk && !dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+            else if (!lOk && dOk) DrawWall( ETileType.eLeft, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+            else if (!lOk && !dOk) DrawWall( ETileType.eLeftDown, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+           
+            for (int i = 1; i < tileNumPerCell - 1; i++)
+            {
+                // down
+                if (!dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
+                else DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
+                // up
+                if (!uOk) DrawWall( ETileType.eUp, cell.tiles[0, i], tileSizePerCell );
+                else DrawGround( ETileType.eNormal, cell.tiles[0, i], tileSizePerCell );
+                // left
+                if (!lOk) DrawWall( ETileType.eLeft, cell.tiles[i, 0], tileSizePerCell );
+                else DrawGround( ETileType.eNormal, cell.tiles[i, 0], tileSizePerCell );
+                // right
+                if (!rOk) DrawWall( ETileType.eRight, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
+                else DrawGround( ETileType.eNormal, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
+            }
+
+            // inner
+            for (int i = 1; i < tileNumPerCell - 1; i++)
+            {
+                for (int j = 1; j < tileNumPerCell - 1; j++)
+                {
+                    DrawGround( ETileType.eNormal, cell.tiles[i, j], tileSizePerCell );
+                }
+            }
         }
     }
 
-    void DrawTile( ETileType tileType, Vector2 pos )
+    void DrawGround( ETileType tileType, GameObject pos, float scaleValue )
     {
-        RoomTypeManager.GetInstance().DrawTile( tileType, pos );
+        RoomTypeManager.GetInstance().DrawGround( tileType, pos, scaleValue );
     }
 
-    void GenerateDoor( Cell prevCell, Cell postCell )
+    void DrawWall( ETileType tileType, GameObject pos, float scaleValue )
     {
-        int xgap = prevCell.pos.x - postCell.pos.x;
-        int ygap = prevCell.pos.y - postCell.pos.y;
-       
-        if (xgap < 0 && ygap == 0)
-        {
-            prevCell.doors[1] = true;
-            postCell.doors[3] = true;
-        }
-        else if (xgap > 0 && ygap == 0)
-        {
-            prevCell.doors[3] = true;
-            postCell.doors[1] = true;
-        }
-        else if (xgap == 0 && ygap > 0)
-        {
-            prevCell.doors[0] = true;
-            postCell.doors[2] = true;
-        }
-        else if (xgap == 0 && ygap < 0)
-        {
-            prevCell.doors[2] = true;
-            postCell.doors[0] = true;
-        }
-
-        groundSprite = Instantiate( tile ).GetComponent<SpriteRenderer>();
-        groundSprite.color = Color.red;
-        groundSprite.transform.localScale = new Vector3( 1, 1, 0 );
-        groundSprite.transform.position = (prevCell.posWorld + postCell.posWorld) / 2;
+        RoomTypeManager.GetInstance().DrawWall( tileType, pos, scaleValue );
     }
 
-    (bool, List<Cell>, int, int) CheckValidRoom( Cell cell )
+    void DrawDoor( ETileType tileType, GameObject tileBaseObj, float scaleValue, Color color )
+    {
+        RoomTypeManager.GetInstance().DrawDoor( tileType, tileBaseObj, scaleValue, color );
+    }
+
+    void GenerateDoor( Cell prevCell, Cell postCell, int dir )
+    {
+        // 문 방향, 위치 정책
+        if (dir == 0 || dir == 1)
+        {
+            DrawDoor( ETileType.eDoor, prevCell.tiles[tileNumPerCell / 2, tileNumPerCell - 1], tileSizePerCell, Color.red );
+            DrawDoor( ETileType.eDoor, postCell.tiles[tileNumPerCell / 2, 0], tileSizePerCell, Color.blue );
+            SetNextDoor( prevCell.tiles[tileNumPerCell / 2, tileNumPerCell - 1], postCell.tiles[tileNumPerCell / 2, 0] );
+        }
+        else
+        {
+            DrawDoor( ETileType.eDoor, prevCell.tiles[tileNumPerCell - 1, tileNumPerCell / 2], tileSizePerCell, Color.green );
+            DrawDoor( ETileType.eDoor, postCell.tiles[0, tileNumPerCell / 2], tileSizePerCell, Color.yellow );
+            SetNextDoor( prevCell.tiles[tileNumPerCell - 1, tileNumPerCell / 2], postCell.tiles[0, tileNumPerCell / 2] );
+        }
+    }
+
+    void SetNextDoor(GameObject prevTile, GameObject postTile)
+    {
+        Door prevDoor = prevTile.GetComponent<Door>();
+        Door postDoor = postTile.GetComponent<Door>();
+        if (prevDoor && postDoor)
+        {
+            prevDoor.NextDoor = postDoor;
+            postDoor.NextDoor = prevDoor;
+            prevDoor.NextDoorPos = postDoor.GetComponent<TileBase>().posWorld;
+            postDoor.NextDoorPos = prevDoor.GetComponent<TileBase>().posWorld;
+        }
+    }
+
+    (bool, List<Cell>) CheckValidRoom( Cell cell )
     {
         bool canGenerate;
-        int x, y;
+        int nx, ny;
         int roomTypeNum = RoomTypeManager.GetInstance().RoomTypes.Length;
         List<Cell> posList = new List<Cell>();
         // 블록의 크기를 정하기 위한 랜덤 배열
-        int[] currentRoomSizeArray = new int[roomTypeNum];
+        int[] currentcellSizeArray = new int[roomTypeNum];
         // 크기가 정해진 블록 중 어떤 모양을 선택할지에 대한 랜덤 배열
         int[] currentRoomTypeArray;
         // 블록 모양의 각 셀 좌표
         Vector2Int[] roomBlocks;
 
         for (int i = 0; i < roomTypeNum; i++)
-            currentRoomSizeArray[i] = i;
+            currentcellSizeArray[i] = i;
 
-        currentRoomSizeArray = ShuffleArray<int>(currentRoomSizeArray);
+        currentcellSizeArray = ShuffleArray<int>(currentcellSizeArray);
 
-        foreach (int currentRoomSize in currentRoomSizeArray)
+        foreach (int currentcellSize in currentcellSizeArray)
         {
-            currentRoomTypeArray = new int[RoomTypeManager.GetInstance().RoomTypes[currentRoomSize].Length];
+            currentRoomTypeArray = new int[RoomTypeManager.GetInstance().RoomTypes[currentcellSize].Length];
 
             for (int i = 0; i < currentRoomTypeArray.Length; i++)
                 currentRoomTypeArray[i] = i;
@@ -249,43 +337,44 @@ public class MapGeneratorIssac : MonoBehaviour
             foreach (int currentRoomType in currentRoomTypeArray)
             {
                 // 블록 모양의 각 셀 좌표
-                roomBlocks = RoomTypeManager.GetInstance().RoomTypes[currentRoomSize][currentRoomType];
+                roomBlocks = RoomTypeManager.GetInstance().RoomTypes[currentcellSize][currentRoomType];
                 canGenerate = true;
                 posList.Clear();
                 foreach (Vector2Int blockPos in roomBlocks)
                 {
-                    x = cell.pos.x + blockPos.x;
-                    y = cell.pos.y + blockPos.y;
+                    nx = cell.pos.x + blockPos.x;
+                    ny = cell.pos.y + blockPos.y;
                     // 맵을 벗어나거나 이미 생성된 셀이면 다른 자리를 찾아봐야 한다.
-                    if (x < 0 || x >= cellList.GetLength( 1 ) || y < 0 || y >= cellList.GetLength( 0 ) || cellList[x, y].isChecked)
+                    if (nx < 0 || nx >= cellList.GetLength( 1 ) || ny < 0 || ny >= cellList.GetLength( 0 ) || cellList[nx, ny].isChecked)
                     {
                         canGenerate = false;
                         break;
                     }
-                    posList.Add( cellList[x, y] );
+                    posList.Add( cellList[nx, ny] );
                 }
                 if (canGenerate)
                 {
-                    return (true, posList, currentRoomSize, currentRoomType);
+                    return (true, posList);
                 }
             }
         }
-        return (false, posList, -1, -1);
+        return (false, posList);
     }
 
     // (기준, 인접)
     HashSet<Cell> GetNearCells( List<Cell> suburbCellList )
     {
+        int nx, ny;
         HashSet<Cell> nearCells = new HashSet<Cell>();
         suburbCellList = ShuffleList<Cell>( suburbCellList );
         foreach (Cell curPos in suburbCellList)
         {
             for (int i = 0; i < 4; i++)
             {
-                int x = curPos.pos.x + xdir[i];
-                int y = curPos.pos.y + ydir[i];
-                if (x < 0 || x >= mapSize.x || y < 0 || y >= mapSize.y || cellList[x, y].isChecked) continue;
-                nearCells.Add( cellList[x, y] );
+                nx = curPos.pos.x + xdir[i];
+                ny = curPos.pos.y + ydir[i];
+                if (nx < 0 || nx >= mapSize.x || ny < 0 || ny >= mapSize.y || cellList[nx, ny].isChecked) continue;
+                nearCells.Add( cellList[nx, ny] );
             }
         }
         return nearCells;

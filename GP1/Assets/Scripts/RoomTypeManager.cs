@@ -14,6 +14,7 @@ public enum ETileType
     eRight,
     eUp,
     eDown,
+    eDoor,
 }
 
 public class RoomTypeManager : MonoBehaviour
@@ -52,7 +53,9 @@ public class RoomTypeManager : MonoBehaviour
     };
 
     public Vector2Int[][][] RoomTypes = new Vector2Int[4][][];
-    [SerializeField] private GameObject tileObj;
+    [SerializeField] private GameObject groundObj;
+    [SerializeField] private GameObject wallObj;
+    [SerializeField] private GameObject doorObj;
     [SerializeField] private Sprite leftUp;
     [SerializeField] private Sprite leftDown;
     [SerializeField] private Sprite rightUp;
@@ -62,9 +65,13 @@ public class RoomTypeManager : MonoBehaviour
     [SerializeField] private Sprite up;
     [SerializeField] private Sprite down;
     [SerializeField] private Sprite normal;
+    [SerializeField] private Sprite door;
     [SerializeField] private int spriteSize = 10;
     [SerializeField] private Dictionary<ETileType, Sprite> spriteDic;
     SpriteRenderer spriteObj;
+    [SerializeField] private GameObject groundParent;
+    [SerializeField] private GameObject wallParent;
+    [SerializeField] private GameObject doorParent;
 
     private void Awake()
     {
@@ -94,7 +101,9 @@ public class RoomTypeManager : MonoBehaviour
             { ETileType.eRight, right },
             { ETileType.eUp, up },
             { ETileType.eDown, down },
-            { ETileType.eNormal, normal }};
+            { ETileType.eNormal, normal },
+            { ETileType.eDoor, door },
+        };
     }
 
     public static RoomTypeManager GetInstance()
@@ -108,11 +117,48 @@ public class RoomTypeManager : MonoBehaviour
         set { spriteSize = value; }
     }
 
-    public void DrawTile( ETileType tileType, Vector2 pos )
+    public void DrawGround( ETileType tileType, GameObject pos, float scaleValue )
     {
-        spriteObj = Instantiate( tileObj ).GetComponent<SpriteRenderer>();
+        //GameObject curGroundObj = Instantiate( groundObj );
+        pos.transform.parent = wallParent.transform;
+        spriteObj = pos.GetComponent<SpriteRenderer>();
         spriteObj.sprite = spriteDic[tileType];
-        spriteObj.transform.position = new Vector3( pos.x, pos.y, 0 );
-        spriteObj.transform.localScale = new Vector2( spriteSize, spriteSize);
+        spriteObj.transform.position = pos.GetComponent<TileBase>().posWorld;
+        spriteObj.transform.localScale = new Vector2( scaleValue, scaleValue );
+        spriteObj.sortingLayerName = "Tile";
+
+        spriteObj.GetComponent<BoxCollider2D>().isTrigger = false;
+        spriteObj.AddComponent<Tile>();
+    }
+
+    public void DrawWall( ETileType tileType, GameObject pos, float scaleValue )
+    {
+        spriteObj = pos.GetComponent<SpriteRenderer>();
+        if (spriteObj.sprite == door) return;
+        pos.transform.parent = wallParent.transform;
+        spriteObj.sprite = spriteDic[tileType];
+        spriteObj.transform.position = pos.GetComponent<TileBase>().posWorld;
+        spriteObj.transform.localScale = new Vector2( scaleValue, scaleValue );
+        spriteObj.sortingLayerName = "Tile";
+
+        spriteObj.GetComponent<BoxCollider2D>().isTrigger = false;
+        spriteObj.AddComponent<Wall>();
+    }
+
+    public void DrawDoor( ETileType tileType, GameObject tileBaseObj, float scaleValue, Color color )
+    {
+        spriteObj = tileBaseObj.GetComponent<SpriteRenderer>();
+        spriteObj.transform.parent = doorParent.transform;
+        spriteObj.sprite = door;
+        spriteObj.transform.position = tileBaseObj.GetComponent<TileBase>().PosWorld;
+        spriteObj.transform.localScale = new Vector2( scaleValue, scaleValue );
+        spriteObj.color = color;
+        spriteObj.sortingLayerName = "Door";
+
+        tileBaseObj.AddComponent<Door>();
+        Wall wallObj = tileBaseObj.GetComponent<Wall>();
+        if (wallObj != null) Destroy( wallObj );
+        Tile groundObj = tileBaseObj.GetComponent<Tile>();
+        if (groundObj != null) Destroy( groundObj );
     }
 }

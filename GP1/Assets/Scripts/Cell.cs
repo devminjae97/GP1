@@ -9,8 +9,8 @@ public class Cell
     public Vector2 posWorld;
     public bool isChecked;
     public int id;
-    public bool[] doors = new bool[] { false, false, false, false };
     public HashSet<int> injectedCellList = new HashSet<int>();
+    public GameObject[,] tiles;
 
     public Cell(Vector2Int pos, Vector2 posWorld)
     {

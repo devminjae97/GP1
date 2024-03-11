@@ -1,18 +1,70 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
+using static UnityEditor.Experimental.GraphView.GraphView;
 
-public class Door : MonoBehaviour
+[Serializable]
+public class Door : TileBase
 {
-    // Start is called before the first frame update
-    void Start()
+    private bool isFirstCollide;
+    [SerializeField] private Door nextDoor;
+    [SerializeField] private Vector2 nextDoorPos;
+
+    private void Awake()
     {
-        
+        boxCollider2D = GetComponent<BoxCollider2D>();
+        if (boxCollider2D != null)
+        {
+            boxCollider2D.enabled = true;
+            boxCollider2D.isTrigger = true;
+        }
     }
 
-    // Update is called once per frame
-    void Update()
+    public Door( Vector2 _posWorld ) : base( _posWorld )
     {
-        
+        this.posWorld = _posWorld;
+    }
+
+    private void OnTriggerEnter2D( Collider2D other )
+    {
+        Player player = other.gameObject.GetComponentInParent<Player>();
+        if (player)
+        {
+            if (isFirstCollide)
+                return;
+
+            EnterRoom( player );
+        }
+    }
+
+    private void OnTriggerExit2D( Collider2D other )
+    {
+        isFirstCollide = false;
+    }
+
+    void EnterRoom(Player player)
+    {
+        nextDoor.IsFirstCollide = true;
+        player.transform.position = nextDoorPos;
+    }
+
+    public Door NextDoor
+    {
+        get { return nextDoor; }
+        set { nextDoor = value; }
+    }
+
+    public Vector2 NextDoorPos
+    {
+        get { return nextDoorPos; }
+        set { nextDoorPos = value; }
+    }
+
+    public bool IsFirstCollide
+    {
+        get { return isFirstCollide; }
+        set { isFirstCollide = value; }
     }
 }
