@@ -24,25 +24,9 @@ public class Player : MonoBehaviour
         controller.Move( moveVelocity );
     }
 
-   /* private void FixedUpdate()
+    public float Speed
     {
-        Move();
+        get { return speed; }
+        set { speed = value; }
     }
-
-    private void Move()
-    {
-        float inputX = Input.GetAxisRaw( "Horizontal" );
-        float inputY = Input.GetAxisRaw( "Vertical" );
-
-        if (Input.GetAxisRaw("Horizontal") < 0)
-        {
-            spriteRenderer.flipX = true;
-        }
-        else if (Input.GetAxisRaw("Horizontal") > 0)
-        {
-            spriteRenderer.flipX = false;
-        }
-
-        rigid.velocity = new Vector2( speed * inputX * inputY, rigid.velocity.y );
-    }*/
 }

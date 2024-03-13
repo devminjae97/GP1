@@ -24,14 +24,17 @@ public class MapGeneratorIssac : MonoBehaviour
     [SerializeField] private GameObject door;
     [SerializeField] private GameObject tileBase;
     [SerializeField] private Cell[,] cellList;
+    [SerializeField] private Player player;
     private SpriteRenderer groundSprite;
     private Vector2Int mapSize;
+    private Dictionary<int, HashSet<int>> roomIDHash = new Dictionary<int, HashSet<int>>();
 
     // Start is called before the first frame update
     void Start()
     {
         InitMap();
-        DrawGrid();
+        InitPlayer();
+       // DrawGrid();
         GenerateRoom( cellList[ cellList.GetLength( 1 ) / 2, cellList.GetLength( 0 ) / 2 ] );
     }
 
@@ -48,6 +51,14 @@ public class MapGeneratorIssac : MonoBehaviour
                 cellList[i, j] = new Cell( new Vector2Int( i, j ), new Vector2( -mapSize.x / 2 + j * cellSize, mapSize.y / 2 - i * cellSize  ) );
             }
         }
+    }
+
+    void InitPlayer()
+    {
+        if (player == null) return;
+
+        player.transform.localScale = new Vector2( tileSizePerCell, tileSizePerCell );
+        player.Speed *= tileSizePerCell * 0.5f;
     }
 
     void DrawGrid()
@@ -91,15 +102,19 @@ public class MapGeneratorIssac : MonoBehaviour
         if (checkRoomResult.Item1 == false) 
             return;
 
-        DrawTestStdCell(stdCell);
+        //DrawTestStdCell(stdCell);
 
         foreach (Cell cell in checkRoomResult.Item2)
         {
             InitTilesOfCell( cell );
-            DrawTestCells( cell );
-
             cell.isChecked = true;
             cell.id = roomCount;
+        }
+        SetTileMap( checkRoomResult.Item2 );
+
+        foreach (Cell cell in checkRoomResult.Item2)
+        {
+            // DrawTestCells( cell );
 
             for (int i = 0; i < 4; i++)
             {
@@ -107,21 +122,18 @@ public class MapGeneratorIssac : MonoBehaviour
                 ny = cell.pos.y + ydir[i];
                 if (0 < nx && nx <= cellList.GetLength(1) && 0 < ny && ny <= cellList.GetLength( 0 ) && cellList[nx, ny].id != cell.id && cellList[nx, ny].id != 0)
                 {
-                    if (cell.IsInjected( cellList[nx, ny].id ))
-                        continue;     
+                    if (IsInjected( cell, cellList[nx, ny] ))
+                        continue;
 
-                    cell.injectedCellList.Add( cellList[nx, ny].id );
-                    cellList[nx, ny].injectedCellList.Add( cell.id );
+                    AddInjectedID( cell, cellList[nx, ny] );
 
-                    if (i == 0) GenerateDoor( cell, cellList[nx, ny], i );
-                    else if (i == 1) GenerateDoor( cellList[nx, ny], cell, i );
-                    else if (i == 2) GenerateDoor( cell, cellList[nx, ny], i );
-                    else if (i == 3) GenerateDoor( cellList[nx, ny], cell, i );
+                    if (i == 0 || i == 2) GenerateDoor( cell, cellList[nx, ny], i );
+                    else if (i == 1 || i == 3) GenerateDoor( cellList[nx, ny], cell, i );
                 }
             }
         }
         roomCount++;
-        SetTileMap(checkRoomResult.Item2);
+        
 
         // 주변 사용하지 않은 cell 탐색
         HashSet<Cell> nearCells = GetNearCells( checkRoomResult.Item2 );
@@ -130,6 +142,31 @@ public class MapGeneratorIssac : MonoBehaviour
             GenerateRoom(cell );
             if (roomCount > roomDepth)
                 return;
+        }
+    }
+
+    bool IsInjected( Cell prevCell, Cell postCell )
+    {
+        return roomIDHash.ContainsKey( prevCell.id ) && roomIDHash[prevCell.id].Contains( postCell.id );
+    }
+
+    void AddInjectedID(Cell prevCell, Cell postCell)
+    {
+        if (roomIDHash.ContainsKey( prevCell.id ))
+        {
+            roomIDHash[prevCell.id].Add( postCell.id );
+        }
+        else
+        {
+            roomIDHash.Add( prevCell.id, new HashSet<int>() { postCell.id } );
+        }
+        if (roomIDHash.ContainsKey( postCell.id ))
+        {
+            roomIDHash[postCell.id].Add( prevCell.id );
+        }
+        else
+        {
+            roomIDHash.Add( postCell.id, new HashSet<int>() { prevCell.id } );
         }
     }
 
@@ -152,14 +189,20 @@ public class MapGeneratorIssac : MonoBehaviour
 
     void InitTilesOfCell(Cell cell)
     {
+        TileBase curTileBase;
         cell.tiles = new GameObject[tileNumPerCell, tileNumPerCell];
         for (int i = 0; i < tileNumPerCell; i++)
         {
             for (int j = 0; j < tileNumPerCell; j++)
             {
                 cell.tiles[i, j] = Instantiate( tileBase );
-                cell.tiles[i, j].GetComponent<TileBase>().posWorld = new Vector2( cell.posWorld.x - cellSize / 2 + j * tileSizePerCell, cell.posWorld.y + cellSize / 2 - i * tileSizePerCell );
-                cell.tiles[i, j].GetComponent<TileBase>().Scale = tileSizePerCell;
+                curTileBase = cell.tiles[i, j].GetComponent<TileBase>();
+
+                if (curTileBase == null) 
+                    continue;
+
+                curTileBase.posWorld = new Vector2( cell.posWorld.x - cellSize / 2 + j * tileSizePerCell, cell.posWorld.y + cellSize / 2 - i * tileSizePerCell );
+                curTileBase.Scale = tileSizePerCell;
             }
         }
     }
@@ -199,57 +242,61 @@ public class MapGeneratorIssac : MonoBehaviour
             // right up
             if (rOk && uOk)
             {
-                if (ruOk) DrawGround( ETileType.eNormal, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
-                else DrawWall( ETileType.eUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+                if (ruOk) DrawTile( ETileType.eGround, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+                else DrawTile( ETileType.eWall, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
             }
-            else if (rOk && !uOk) DrawWall( ETileType.eUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
-            else if (!rOk && uOk) DrawWall( ETileType.eRight, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
-            else if (!rOk && !uOk) DrawWall( ETileType.eRightUp, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+            else if (rOk && !uOk || !rOk && uOk || !rOk && !uOk)
+            {
+                DrawTile( ETileType.eWall, cell.tiles[0, tileNumPerCell - 1], tileSizePerCell );
+            }
 
             // right down
             if (rOk && dOk)
             {
-                if (rdOk) DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
-                else DrawWall( ETileType.eUp, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+                if (rdOk) DrawTile( ETileType.eGround, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+                else DrawTile( ETileType.eWall, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
             }
-            else if (rOk && !dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
-            else if (!rOk && dOk) DrawWall( ETileType.eRight, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
-            else if (!rOk && !dOk) DrawWall( ETileType.eRightDown, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+            else if (rOk && !dOk || !rOk && dOk || !rOk && !dOk)
+            {
+                DrawTile( ETileType.eWall, cell.tiles[tileNumPerCell - 1, tileNumPerCell - 1], tileSizePerCell );
+            }
 
             // left up
             if (lOk && uOk)
             {
-                if (luOk) DrawGround( ETileType.eNormal, cell.tiles[0, 0], tileSizePerCell );
-                else DrawWall( ETileType.eUp, cell.tiles[0, 0], tileSizePerCell );
+                if (luOk) DrawTile( ETileType.eGround, cell.tiles[0, 0], tileSizePerCell );
+                else DrawTile( ETileType.eWall, cell.tiles[0, 0], tileSizePerCell );
             }
-            else if (lOk && !uOk) DrawWall( ETileType.eUp, cell.tiles[0, 0], tileSizePerCell );
-            else if (!lOk && uOk) DrawWall( ETileType.eLeft, cell.tiles[0, 0], tileSizePerCell );
-            else if (!lOk && !uOk) DrawWall( ETileType.eLeftUp, cell.tiles[0, 0], tileSizePerCell );
+            else if (lOk && !uOk || !lOk && uOk || !lOk && !uOk)
+            {
+                DrawTile( ETileType.eWall, cell.tiles[0, 0], tileSizePerCell );
+            }
 
             // left down
             if (lOk && dOk)
             {
-                if (ldOk) DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
-                else DrawWall( ETileType.eUp, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+                if (ldOk) DrawTile( ETileType.eGround, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+                else DrawTile( ETileType.eWall, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
             }
-            else if (lOk && !dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
-            else if (!lOk && dOk) DrawWall( ETileType.eLeft, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
-            else if (!lOk && !dOk) DrawWall( ETileType.eLeftDown, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+            else if (lOk && !dOk || !lOk && dOk || !lOk && !dOk)
+            {
+                DrawTile( ETileType.eWall, cell.tiles[tileNumPerCell - 1, 0], tileSizePerCell );
+            }
            
             for (int i = 1; i < tileNumPerCell - 1; i++)
             {
                 // down
-                if (!dOk) DrawWall( ETileType.eDown, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
-                else DrawGround( ETileType.eNormal, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
+                if (!dOk) DrawTile( ETileType.eWall, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
+                else DrawTile( ETileType.eGround, cell.tiles[tileNumPerCell - 1, i], tileSizePerCell );
                 // up
-                if (!uOk) DrawWall( ETileType.eUp, cell.tiles[0, i], tileSizePerCell );
-                else DrawGround( ETileType.eNormal, cell.tiles[0, i], tileSizePerCell );
+                if (!uOk) DrawTile( ETileType.eWall, cell.tiles[0, i], tileSizePerCell );
+                else DrawTile( ETileType.eGround, cell.tiles[0, i], tileSizePerCell );
                 // left
-                if (!lOk) DrawWall( ETileType.eLeft, cell.tiles[i, 0], tileSizePerCell );
-                else DrawGround( ETileType.eNormal, cell.tiles[i, 0], tileSizePerCell );
+                if (!lOk) DrawTile( ETileType.eWall, cell.tiles[i, 0], tileSizePerCell );
+                else DrawTile( ETileType.eGround, cell.tiles[i, 0], tileSizePerCell );
                 // right
-                if (!rOk) DrawWall( ETileType.eRight, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
-                else DrawGround( ETileType.eNormal, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
+                if (!rOk) DrawTile( ETileType.eWall, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
+                else DrawTile( ETileType.eGround, cell.tiles[i, tileNumPerCell - 1], tileSizePerCell );
             }
 
             // inner
@@ -257,25 +304,20 @@ public class MapGeneratorIssac : MonoBehaviour
             {
                 for (int j = 1; j < tileNumPerCell - 1; j++)
                 {
-                    DrawGround( ETileType.eNormal, cell.tiles[i, j], tileSizePerCell );
+                    DrawTile( ETileType.eGround, cell.tiles[i, j], tileSizePerCell );
                 }
             }
         }
     }
 
-    void DrawGround( ETileType tileType, GameObject pos, float scaleValue )
+    void DrawTile( ETileType tileType, GameObject pos, float scaleValue )
     {
-        RoomTypeManager.GetInstance().DrawGround( tileType, pos, scaleValue );
-    }
-
-    void DrawWall( ETileType tileType, GameObject pos, float scaleValue )
-    {
-        RoomTypeManager.GetInstance().DrawWall( tileType, pos, scaleValue );
+        RoomTypeManager.GetInstance().DrawTile( tileType, pos, scaleValue );
     }
 
     void DrawDoor( ETileType tileType, GameObject tileBaseObj, float scaleValue, Color color )
     {
-        RoomTypeManager.GetInstance().DrawDoor( tileType, tileBaseObj, scaleValue, color );
+        RoomTypeManager.GetInstance().DrawDoor( tileType, tileBaseObj, scaleValue );
     }
 
     void GenerateDoor( Cell prevCell, Cell postCell, int dir )
@@ -315,18 +357,18 @@ public class MapGeneratorIssac : MonoBehaviour
         int roomTypeNum = RoomTypeManager.GetInstance().RoomTypes.Length;
         List<Cell> posList = new List<Cell>();
         // 블록의 크기를 정하기 위한 랜덤 배열
-        int[] currentcellSizeArray = new int[roomTypeNum];
+        int[] currentCellSizeArray = new int[roomTypeNum];
         // 크기가 정해진 블록 중 어떤 모양을 선택할지에 대한 랜덤 배열
         int[] currentRoomTypeArray;
         // 블록 모양의 각 셀 좌표
         Vector2Int[] roomBlocks;
 
         for (int i = 0; i < roomTypeNum; i++)
-            currentcellSizeArray[i] = i;
+            currentCellSizeArray[i] = i;
 
-        currentcellSizeArray = ShuffleArray<int>(currentcellSizeArray);
+        currentCellSizeArray = ShuffleArray<int>(currentCellSizeArray);
 
-        foreach (int currentcellSize in currentcellSizeArray)
+        foreach (int currentcellSize in currentCellSizeArray)
         {
             currentRoomTypeArray = new int[RoomTypeManager.GetInstance().RoomTypes[currentcellSize].Length];
 

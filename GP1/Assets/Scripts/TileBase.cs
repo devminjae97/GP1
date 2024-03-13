@@ -4,10 +4,10 @@ using UnityEngine;
 
 public class TileBase : MonoBehaviour
 {
+    public float scale;
+    public Vector2 posWorld;
     private SpriteRenderer spriteRenderer;
     protected BoxCollider2D boxCollider2D;
-    public Vector2 posWorld;
-    public float scale;
 
     void Awake()
     {
