@@ -9,8 +9,10 @@ using static UnityEditor.Experimental.GraphView.GraphView;
 public class Door : TileBase
 {
     private bool isFirstCollide;
+    [SerializeField] private Cell ownerCell;
     [SerializeField] private Door nextDoor;
     [SerializeField] private Vector2 nextDoorPos;
+    [SerializeField] private SpriteRenderer minimapRenderer;
 
     private void Awake()
     {
@@ -44,10 +46,18 @@ public class Door : TileBase
         isFirstCollide = false;
     }
 
-    void EnterRoom(Player player)
+    void EnterRoom( Player player )
     {
         nextDoor.IsFirstCollide = true;
         player.transform.position = nextDoorPos;
+
+        ownerCell.EnterCell( nextDoor.OwnerCell );
+    }
+
+    public Cell OwnerCell
+    {
+        get { return ownerCell; }
+        set { ownerCell = value; }
     }
 
     public Door NextDoor
