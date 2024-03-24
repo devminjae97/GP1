@@ -10,7 +10,6 @@ public class Player : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private Rigidbody2D rigid;
 
-
     void Start()
     {
         controller = GetComponent<PlayerController>();

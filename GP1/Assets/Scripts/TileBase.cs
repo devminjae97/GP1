@@ -35,4 +35,29 @@ public class TileBase : MonoBehaviour
     {
         this.posWorld = _posWorld;
     }
+
+    public void SetVisibility(bool isVisible)
+    {
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        boxCollider2D = GetComponent<BoxCollider2D>();
+
+        if (spriteRenderer != null )
+        {
+            spriteRenderer.enabled = isVisible;
+        }
+        if (boxCollider2D != null )
+        {
+            boxCollider2D.enabled = isVisible;
+        }
+    }
+
+    public void SetColor(Color color)
+    {
+        spriteRenderer = GetComponent<SpriteRenderer>();
+
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = color;
+        }
+    }
 }

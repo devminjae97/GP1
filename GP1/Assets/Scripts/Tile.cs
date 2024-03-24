@@ -11,6 +11,11 @@ public class Tile : TileBase
         {
             boxCollider2D.enabled = false;
         }
+
+        if (!GameTestManager.GetInstance().allMapVisibleMode)
+        {
+            SetVisibility( false );
+        }
     }
 
     public Tile( Vector2 _posWorld ) : base( _posWorld )

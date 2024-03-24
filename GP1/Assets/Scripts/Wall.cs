@@ -12,6 +12,12 @@ public class Wall : TileBase
         {
             boxCollider2D.enabled = true;
             boxCollider2D.isTrigger = false;
+            boxCollider2D.size = new Vector2( 1, 1 );
+        }
+
+        if (!GameTestManager.GetInstance().allMapVisibleMode)
+        {
+            SetVisibility( false );
         }
     }
 

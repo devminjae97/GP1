@@ -41,8 +41,11 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
-  - name: Tile
+  - name: Ground
     uniqueID: 2097543445
+    locked: 0
+  - name: Wall
+    uniqueID: 2225310727
     locked: 0
   - name: Door
     uniqueID: 1241135713

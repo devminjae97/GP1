@@ -7,6 +7,7 @@ public class GameTestManager : MonoBehaviour
     private static GameTestManager instance;
 
     public bool allMapVisibleMode;
+    public bool DoNotMoveCameraMode;
 
     private void Awake()
     {
