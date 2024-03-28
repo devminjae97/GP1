@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -12,11 +13,14 @@ public class Cell : MonoBehaviour
     public Vector2Int pos;
     public Vector2 posWorld;
     private SpriteRenderer minimapSprite;
-    private Color activeColor;
-    private Color deactiveColor;
+    public UnityEngine.Color activeColor;
+    public UnityEngine.Color deactiveColor;
     public Dictionary<int, GameObject> walls;
+    public List<Door> doors;
+    public Vector3Int tilemapLocalPos;
+    //public CustomTile[,] tiles;
 
-    public Cell( Vector2Int pos, Vector2 posWorld )
+    public Cell( Vector2Int pos, Vector2 posWorld, int size )
     {
         this.pos = pos;
         this.posWorld = posWorld;
@@ -32,26 +36,22 @@ public class Cell : MonoBehaviour
             { 2, null },
             { 3, null }
         };
+
+        doors = new List<Door>();
     }
 
-    public void InitPos( Vector2Int pos )
+    public void InitCell( Vector2Int pos )
     {
         this.pos = pos;
-
     }
 
     public void InitMinimapSprite( Sprite _sprite, Quaternion _rotate )
     {
         minimapSprite.sprite = _sprite;
         minimapSprite.transform.localRotation = _rotate;
-
-        // 처음에는 투명하게 설정
-        Color curColor = minimapSprite.color;
-        curColor.a = 0;
-        minimapSprite.color = curColor;
     }
 
-    public void VisitCell()
+    /*public void VisitCell()
     {
         isVisited = true;
         SetCameraPos( id );
@@ -59,10 +59,6 @@ public class Cell : MonoBehaviour
         foreach (Cell curCell in DungeonManager.GetInstance().roomDic[id])
         {
             curCell.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>().color = activeColor;
-            foreach (TileBase tb in curCell.GetComponentsInChildren<TileBase>())
-            {
-                tb.SetVisibility( true );
-            }
         }
     }
 
@@ -73,19 +69,13 @@ public class Cell : MonoBehaviour
         foreach (Cell cell in DungeonManager.GetInstance().roomDic[id])
         {
             cell.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>().color = deactiveColor;
-            foreach (TileBase tb in cell.GetComponentsInChildren<TileBase>())
-            {
-                tb.SetVisibility( false );
-            }
+            cell.SetDoorsEnable( true );
         }
 
         foreach (Cell cell in DungeonManager.GetInstance().roomDic[nextCell.id])
         {
             cell.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>().color = activeColor;
-            foreach (TileBase tb in cell.GetComponentsInChildren<TileBase>())
-            {
-                tb.SetVisibility( true );
-            }
+            cell.SetDoorsEnable( false );
         }
     }
 
@@ -97,12 +87,8 @@ public class Cell : MonoBehaviour
         foreach (Cell cur in DungeonManager.GetInstance().roomDic[cell.id])
         {
             cur.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>().color = activeColor;
-            foreach (TileBase tb in cur.GetComponentsInChildren<TileBase>())
-            {
-                tb.SetVisibility( isVisible );
-            }
         }
-    }
+    }*/
 
     public void SetCameraPos( int id )
     {
@@ -111,5 +97,21 @@ public class Cell : MonoBehaviour
 
         DungeonManager.GetInstance().SetPlayerRoomID( id );
         DungeonManager.GetInstance().SetMainCameraPos();
+    }
+
+    public void SetDoorsVisibility(bool isVisible)
+    {
+        foreach(Door curDoor in doors)
+        {
+            //curDoor
+        }
+    }
+
+    public void SetDoorsEnable( bool isEnable )
+    {
+        foreach (Door curDoor in doors)
+        {
+            curDoor.enabled = isEnable;
+        }
     }
 }

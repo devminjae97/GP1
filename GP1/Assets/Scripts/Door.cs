@@ -6,12 +6,12 @@ using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 using static UnityEditor.Experimental.GraphView.GraphView;
 
 [Serializable]
-public class Door : TileBase
+public class Door : CustomTileBase
 {
-    private bool isFirstCollide;
+    private bool canCollide = false;
     [SerializeField] private Cell ownerCell;
     [SerializeField] private Door nextDoor;
-    [SerializeField] private Vector2 nextDoorPos;
+    [SerializeField] private Vector3Int nextDoorPos;
     [SerializeField] private SpriteRenderer minimapRenderer;
 
     private void Awake()
@@ -32,26 +32,31 @@ public class Door : TileBase
     private void OnTriggerEnter2D( Collider2D other )
     {
         Player player = other.gameObject.GetComponentInParent<Player>();
-        if (player)
+        if (player && !canCollide)
         {
-            if (isFirstCollide)
-                return;
+            nextDoor.canCollide = true;
+            DungeonManager.GetInstance().SetPlayerPos( nextDoorPos );
+            DungeonManager.GetInstance().SetPlayerRoomID( nextDoor.ownerCell.id );
+            DungeonManager.GetInstance().SetMainCameraPos();
 
-            EnterRoom( player );
+            if (!GameTestManager.GetInstance().allMapVisibleMode)
+            {
+                DungeonManager.GetInstance().SetVisibilityTiles( nextDoor.ownerCell.id, true );
+                DungeonManager.GetInstance().SetVisibilityTiles( ownerCell.id, false );
+
+                DungeonManager.GetInstance().ActivateMinimap( nextDoor.ownerCell.id, true );
+                DungeonManager.GetInstance().ActivateMinimap( ownerCell.id, false );
+            }
         }
     }
 
     private void OnTriggerExit2D( Collider2D other )
     {
-        isFirstCollide = false;
-    }
-
-    void EnterRoom( Player player )
-    {
-        nextDoor.IsFirstCollide = true;
-        player.transform.position = nextDoorPos;
-
-        ownerCell.EnterCell( nextDoor.OwnerCell );
+        Player player = other.gameObject.GetComponentInParent<Player>();
+        if (player)
+        {
+            canCollide = false;
+        }
     }
 
     public Cell OwnerCell
@@ -66,15 +71,15 @@ public class Door : TileBase
         set { nextDoor = value; }
     }
 
-    public Vector2 NextDoorPos
+    public Vector3Int NextDoorPos
     {
         get { return nextDoorPos; }
         set { nextDoorPos = value; }
     }
 
-    public bool IsFirstCollide
+    public bool CanCollide
     {
-        get { return isFirstCollide; }
-        set { isFirstCollide = value; }
+        get { return canCollide; }
+        set { canCollide = value; }
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-public class Wall : TileBase
+public class Wall : CustomTileBase
 {
     private void Awake()
     {

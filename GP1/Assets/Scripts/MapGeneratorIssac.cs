@@ -1,12 +1,25 @@
 using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 public enum ETileType
 {
     eGround,
     eWall,
     eDoor,
+}
+
+public enum EDir
+{
+    eRight,
+    eLeft,
+    eDown,
+    eUp,
+    eLeftUp,
+    eRightUp,
+    eLeftDown,
+    eRightDown,
 }
 
 public class MapGeneratorIssac : MonoBehaviour
@@ -19,15 +32,13 @@ public class MapGeneratorIssac : MonoBehaviour
     [SerializeField] private int roomDepth = 10;
     [SerializeField] private int cellSize = 30;
     [SerializeField, Tooltip("cellSize % tileNumPerCell == 0")] private int tileNumPerCell = 30;
-    [SerializeField] private GameObject gridRenderer;
-    [SerializeField] private GameObject lineRenderer;
     [SerializeField] private GameObject cellObj;
     [SerializeField] private GameObject groundObj;
     [SerializeField] private GameObject wallObj;
     [SerializeField] private GameObject doorObj;
     [SerializeField] private GameObject tileBaseObj;
     [SerializeField] private Cell[,] cellList;
-    [SerializeField] private Player player;
+    [SerializeField] private GameObject player;
     [SerializeField] private Sprite groundSprite;
     [SerializeField] private Sprite wallSprite;
     [SerializeField] private Sprite doorSprite;
@@ -38,6 +49,17 @@ public class MapGeneratorIssac : MonoBehaviour
     private Dictionary<int, HashSet<int>> roomIDHash = new Dictionary<int, HashSet<int>>();
     [SerializeField] private Dictionary<ETileType, Sprite> spriteDic;
     [SerializeField] private GameObject cellParent;
+
+    [SerializeField] private Tilemap groundTilemap;
+    [SerializeField] private Tilemap wallTilemap;
+    [SerializeField] private Tilemap minimapTilemap;
+    [SerializeField] private TileBase groundTile;
+    [SerializeField] private TileBase doorTile;
+    [SerializeField] private TileBase wallTile;
+    [SerializeField] private GameObject grid;
+    private Tilemap groundTilemapObj;
+    private Tilemap wallTilemapObj;
+    private Tilemap doorTilemapObj;
 
     public Vector2Int[][][] RoomTypes = new Vector2Int[][][]
     {
@@ -75,10 +97,17 @@ public class MapGeneratorIssac : MonoBehaviour
     void Start()
     {
         InitMap();
-        InitPlayer();
         GenerateRoom( cellList[ cellList.GetLength( 1 ) / 2, cellList.GetLength( 0 ) / 2 ] );
+        InitPlayer();
 
-        cellList[roomDepth * 2, roomDepth * 2].EnterCell( cellList[roomDepth * 2, roomDepth * 2] );
+        if (!GameTestManager.GetInstance().allMapVisibleMode)
+        {
+            for (int id = 2; id < roomCount; id++)
+            {
+                DungeonManager.GetInstance().SetVisibilityTiles( id, false );
+                DungeonManager.GetInstance().SetVisibilityMinimap( id, false );
+            }
+        }
     }
 
     void InitMap()
@@ -92,10 +121,11 @@ public class MapGeneratorIssac : MonoBehaviour
             for (int j = 0; j < cellNum; j++)
             {
                 cellList[i, j] = Instantiate( cellObj ).GetComponent<Cell>();
-                cellList[i, j].InitPos( new Vector2Int( i, j ));
+                cellList[i, j].InitCell( new Vector2Int( i, j ));
                 cellList[i, j].transform.localScale = new Vector3( cellSize, cellSize, 0 );
-                cellList[i, j].transform.position = new Vector3( -mapSize.x / 2 + j * cellSize, mapSize.y / 2 - i * cellSize, 10 );
+                cellList[i, j].transform.position = new Vector3( i * cellSize + cellSize / 2 - 100, j * cellSize + cellSize / 2 - 100, 10 );
                 cellList[i, j].transform.parent = cellParent.transform;
+                cellList[i, j].tilemapLocalPos = new Vector3Int( cellList[i, j].pos.x + (tileNumPerCell - 1) * i - 100, cellList[i, j].pos.y + (tileNumPerCell - 1) * j - 100, 0 );
             }
         }
 
@@ -111,17 +141,9 @@ public class MapGeneratorIssac : MonoBehaviour
         if (player == null) 
             return;
 
-        DungeonManager.GetInstance().SetPlayerSize(tileSizePerCell * 0.75f);
+        DungeonManager.GetInstance().SetPlayerTransform( cellList[roomDepth * 2, roomDepth * 2].transform.position, groundTilemap.cellSize.x * 0.5f);
 
-        player.Speed *= tileSizePerCell * 0.5f;
-    }
-
-    void DrawLine( Vector2 from, Vector2 to )
-    {
-        LineRenderer line = Instantiate( lineRenderer ).GetComponent<LineRenderer>();
-
-        line.SetPosition( 0, from);
-        line.SetPosition( 1, to);
+        player.GetComponent<Player>().Speed *= tileSizePerCell * 0.5f * player.transform.localScale.x;
     }
 
     /*
@@ -144,8 +166,6 @@ public class MapGeneratorIssac : MonoBehaviour
         {
             cell.isChecked = true;
             cell.id = roomCount;
-
-            DungeonManager.GetInstance().AddToRoomDic( cell );
         }
 
         SetTileMap( checkRoomResult.Item2 );
@@ -163,8 +183,9 @@ public class MapGeneratorIssac : MonoBehaviour
 
                     AddInjectedID( cell, cellList[nx, ny] );
 
-                    if (i == 0 || i == 2) GenerateDoor( cell, cellList[nx, ny], i );
-                    else if (i == 1 || i == 3) GenerateDoor( cellList[nx, ny], cell, i );
+                    if (i == 0 || i == 2) GenerateDoor( cell, cellList[nx, ny], (EDir)i );
+                    else if (i == 1 || i == 3) GenerateDoor( cellList[nx, ny], cell, (EDir)i );
+
                 }
             }
         }
@@ -248,11 +269,15 @@ public class MapGeneratorIssac : MonoBehaviour
             luOk = 0 <= lux && lux < cellList.GetLength( 1 ) && 0 <= luy && luy < cellList.GetLength( 0 ) && cellList[lux, luy].id == cell.id;
             ruOk = 0 <= rux && rux < cellList.GetLength( 1 ) && 0 <= ruy && ruy < cellList.GetLength( 0 ) && cellList[rux, ruy].id == cell.id;
 
-            DrawTile( ETileType.eGround, cell, cell.transform.position, Quaternion.Euler( 0, 0, 0 ), -1 );
-            if (!uOk) DrawTile( ETileType.eWall, cell, new Vector2( cell.transform.position.x, cell.transform.position.y + cellSize / 2 + tileSizePerCell / 2 ), Quaternion.Euler( 0, 0, 0 ), 3 );
-            if (!dOk) DrawTile( ETileType.eWall, cell, new Vector2( cell.transform.position.x, cell.transform.position.y - cellSize / 2 - tileSizePerCell / 2 ), Quaternion.Euler( 0, 0, 180 ), 2 );
-            if (!rOk) DrawTile( ETileType.eWall, cell, new Vector2( cell.transform.position.x + cellSize / 2 + tileSizePerCell / 2, cell.transform.position.y ), Quaternion.Euler( 0, 0, -90 ), 0 );
-            if (!lOk) DrawTile( ETileType.eWall, cell, new Vector2( cell.transform.position.x - cellSize / 2 - tileSizePerCell / 2, cell.transform.position.y ), Quaternion.Euler( 0, 0, 90 ), 1 );
+            DrawTilesInCell( cell );
+            if (!uOk) DrawWall( cell, EDir.eUp);
+            if (!dOk) DrawWall( cell, EDir.eDown);
+            if (!rOk) DrawWall( cell, EDir.eRight);
+            if (!lOk) DrawWall( cell, EDir.eLeft);
+            if (!luOk) DrawWall( cell, EDir.eLeftUp );
+            if (!ruOk) DrawWall( cell, EDir.eRightUp );
+            if (!ldOk) DrawWall( cell, EDir.eLeftDown );
+            if (!rdOk) DrawWall( cell, EDir.eRightDown );
             DrawMinimap(cell, dOk, uOk, lOk, rOk);
         }
     }
@@ -261,139 +286,177 @@ public class MapGeneratorIssac : MonoBehaviour
     {
         if (!dOk && !uOk && !lOk && !rOk)
         {
+            //posWorld
             cell.InitMinimapSprite( minimap4Walls, Quaternion.Euler( 0, 0, 0 ) );
         }
         else if (!dOk && !uOk && !lOk)
         {
-            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 90 ) );
+            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 180 ) );
         }
         else if (!dOk && !rOk && !lOk)
         {
-            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 180 ) );
+            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 270 ) );
         }
         else if (!dOk && !rOk && !uOk)
         {
-            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, -90 ) );
+            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 0 ) );
         }
         else if (!lOk && !uOk && !rOk)
         {
-            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 0 ) );
+            cell.InitMinimapSprite( minimap3Walls, Quaternion.Euler( 0, 0, 90 ) );
         }
         else if (!lOk && !uOk)
         {
-            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 0 ) );
+            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 90 ) );
         }
         else if (!lOk && !dOk)
         {
-            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 90 ) );
+            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 180 ) );
         }
         else if (!rOk && !dOk)
         {
-            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 180 ) );
+            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, -90 ) );
         }
         else if (!uOk && !rOk)
         {
-            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, -90 ) );
+            cell.InitMinimapSprite( minimap2Walls, Quaternion.Euler( 0, 0, 0 ) );
         }
     }
 
-    public void DrawTile( ETileType tileType, Cell cell, Vector2 pos, Quaternion rotation, int dir )
+    void DrawTilesInCell(Cell cell)
     {
-        SpriteRenderer sr;
-        if (tileType == ETileType.eGround)
+        Vector3Int curPos;
+        for (int i = 0; i < tileNumPerCell; i++)
         {
-            sr = Instantiate( groundObj ).GetComponent<SpriteRenderer>();
-            sr.transform.parent = cell.transform;
-            if (sr.sprite == doorSprite) return;
-            sr.sprite = spriteDic[tileType];
-            sr.transform.position = pos;
-            sr.transform.localScale = new Vector2( (float)1 / (float)tileNumPerCell, (float)1 / (float)tileNumPerCell );
-            sr.transform.localRotation = rotation;
-            sr.sortingLayerName = "Ground";
+            for (int j = 0; j < tileNumPerCell; j++)
+            {
+                curPos = new Vector3Int( cell.tilemapLocalPos.x + i, cell.tilemapLocalPos.y + j, 0 );
+                groundTilemap.SetTile( curPos, groundTile );
 
-            sr.drawMode = SpriteDrawMode.Tiled;
-            sr.size = new Vector2( tileNumPerCell, tileNumPerCell );
+                DungeonManager.GetInstance().AddToTilemapDic(roomCount, groundTilemap, curPos);
+            }
         }
-        else if (tileType == ETileType.eWall)
-        {
-            sr = Instantiate( wallObj ).GetComponent<SpriteRenderer>();
-            cell.walls[dir] = sr.gameObject;
-            sr.transform.parent = cell.transform;
-            if (sr.sprite == doorSprite) return;
-            sr.sprite = spriteDic[tileType];
-            sr.transform.position = pos;
-            sr.transform.localScale = new Vector2( (float)1 / (float)tileNumPerCell, (float)1 / (float)tileNumPerCell );
-            sr.transform.localRotation = rotation;
-            sr.sortingLayerName = "Wall";
 
-            sr.drawMode = SpriteDrawMode.Tiled;
-            if (rotation.z == 90 || rotation.z == -90)
-                sr.size = new Vector2( 1, tileNumPerCell );
-            else
-                sr.size = new Vector2( tileNumPerCell, 1 );
+        // 방의 중앙값 구하기
+        cell.posWorld = groundTilemap.CellToWorld( new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell / 2, 0 ) );
+        DungeonManager.GetInstance().AddToRoomDic( cell );
+    }
+
+    void DrawWall( Cell cell, EDir dir )
+    {
+        Vector3Int pos = new Vector3Int(0, 0, 0);
+        switch (dir)
+        {
+            case EDir.eDown:
+                for (int i = 0; i < tileNumPerCell; i++)
+                {
+                    pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell - 1, cell.tilemapLocalPos.y + i );
+                    wallTilemap.SetTile( pos, wallTile );
+                    DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                }
+                break;
+            case EDir.eUp:
+                for (int i = 0; i < tileNumPerCell; i++)
+                {
+                    pos = new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y + i );
+                    wallTilemap.SetTile( pos, wallTile );
+                    DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                }
+                break;
+            case EDir.eLeft:
+                for (int i = 0; i < tileNumPerCell; i++)
+                {
+                    pos = new Vector3Int( cell.tilemapLocalPos.x + i, cell.tilemapLocalPos.y );
+                    wallTilemap.SetTile( pos, wallTile );
+                    DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                }
+                break;
+            case EDir.eRight:
+                for (int i = 0; i < tileNumPerCell; i++)
+                {
+                    pos = new Vector3Int( cell.tilemapLocalPos.x + i, cell.tilemapLocalPos.y + tileNumPerCell - 1 );
+                    wallTilemap.SetTile( pos, wallTile );
+                    DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                }
+                break;
+            case EDir.eLeftUp:
+                pos = new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y );
+                wallTilemap.SetTile( pos, wallTile );
+                DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                break;
+            case EDir.eRightUp:
+                pos = new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y + tileNumPerCell - 1 );
+                wallTilemap.SetTile( pos, wallTile );
+                DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                break;
+            case EDir.eLeftDown:
+                pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell - 1, cell.tilemapLocalPos.y );
+                wallTilemap.SetTile( pos, wallTile );
+                DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                break;
+            case EDir.eRightDown:
+                pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell - 1, cell.tilemapLocalPos.y + tileNumPerCell - 1 );
+                wallTilemap.SetTile( pos, wallTile );
+                DungeonManager.GetInstance().AddToTilemapDic( roomCount, wallTilemap, pos );
+                break;
+            default:
+                break;
+        }
+    }
+
+    public Door DrawDoor( Cell cell, EDir dir )
+    {
+        Vector3Int pos;
+        Door doorInstance = Instantiate( doorObj ).GetComponent<Door>();
+        doorInstance.OwnerCell = cell;
+        switch (dir)
+        {
+            case EDir.eLeft:
+                pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 0, -1, 0 );
+                break;
+            case EDir.eRight:
+                pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell - 1 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 0, 1, 0 );
+                break;
+            case EDir.eUp:
+                pos = new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y + tileNumPerCell / 2 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( -1, 0, 0 );
+                break;
+            case EDir.eDown:
+                pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell - 1, cell.tilemapLocalPos.y + tileNumPerCell / 2 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 1, 0, 0 );
+                break;
+            default:
+                pos = new Vector3Int( 0, 0, 0 );
+                break;
         }
         
-
-        /*if (tileType == ETileType.eGround)
-        {
-            //spriteObj.GetComponent<BoxCollider2D>().isTrigger = true;
-            sr.AddComponent<Tile>();
-        }
-        else if (tileType == ETileType.eWall)
-        {
-            //spriteObj.GetComponent<BoxCollider2D>().isTrigger = false;
-            spriteObj.AddComponent<Wall>();
-        }*/
-
+        wallTilemap.SetTile( pos, null );
+        DungeonManager.GetInstance().AddToDoorDic( cell.id, doorInstance );
+        doorInstance.transform.position = groundTilemap.CellToWorld( pos );
+        return doorInstance;
     }
 
-    public void DrawDoor( Cell ownerCell, int dir )
+    void GenerateDoor( Cell prevCell, Cell postCell, EDir dir )
     {
-        SpriteRenderer spriteObj = Instantiate(doorObj).GetComponent<SpriteRenderer>();
-        spriteObj.transform.parent = ownerCell.transform;
-        spriteObj.sprite = doorSprite;
-        spriteObj.transform.localPosition = ownerCell.walls[dir].transform.localPosition;
-        spriteObj.transform.localScale = new Vector2( 1 / (float)tileNumPerCell, 1 / (float)tileNumPerCell );
-        spriteObj.sortingLayerName = "Door";
-
-        Door door = spriteObj.GetComponent<Door>();
-        door.OwnerCell = ownerCell;
-
-        if (ownerCell.walls[dir] != null)
-        {
-            //DrawTile();
-            //DrawTile();
-        }
-    }
-
-    void GenerateDoor( Cell prevCell, Cell postCell, int dir )
-    {
+        Door prevDoor, postDoor;
         // 문 방향, 위치 정책
-        if (dir == 0 || dir == 1)
+        if (dir == EDir.eRight || dir == EDir.eLeft)
         {
-            DrawDoor( prevCell, 0 );
-            DrawDoor( postCell, 1 );
-            //SetNextDoor( prevCell.tiles[tileNumPerCell / 2, tileNumPerCell - 1], postCell.tiles[tileNumPerCell / 2, 0] );
+            prevDoor = DrawDoor( prevCell, EDir.eRight );
+            postDoor = DrawDoor( postCell, EDir.eLeft );
         }
         else
         {
-            DrawDoor( prevCell, 3 );
-            DrawDoor( postCell, 2 );
-            //SetNextDoor( prevCell.tiles[tileNumPerCell - 1, tileNumPerCell / 2], postCell.tiles[0, tileNumPerCell / 2] );
+            prevDoor = DrawDoor( prevCell, EDir.eDown );
+            postDoor = DrawDoor( postCell, EDir.eUp );
         }
-    }
 
-    void SetNextDoor(GameObject prevTile, GameObject postTile)
-    {
-        Door prevDoor = prevTile.GetComponent<Door>();
-        Door postDoor = postTile.GetComponent<Door>();
-        if (prevDoor && postDoor)
-        {
-            prevDoor.NextDoor = postDoor;
-            postDoor.NextDoor = prevDoor;
-            prevDoor.NextDoorPos = postDoor.GetComponent<TileBase>().posWorld;
-            postDoor.NextDoorPos = prevDoor.GetComponent<TileBase>().posWorld;
-        }
+        prevDoor.NextDoor = postDoor;
+        postDoor.NextDoor = prevDoor;
+        prevDoor.NextDoor.OwnerCell = postCell;
+        postDoor.NextDoor.OwnerCell = prevCell;
     }
 
     (bool, List<Cell>) CheckValidRoom( Cell cell )
