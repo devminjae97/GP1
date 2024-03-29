@@ -9,7 +9,7 @@ public class MapGenerator : MonoBehaviour
     public UnityEngine.Tilemaps.TileBase tilebase;
     private float tileSizePerCell;
     private float tileNumPerCell;
-    private int roomCount = 1;
+    private int roomID = 1;
     // 오른쪽, 왼쪽, 아래, 위, 왼쪽아래, 오른쪽아래, 왼쪽위, 오른쪽위
     private int[] xdir = new int[] { 0, 0, 1, -1, 1, 1, -1, -1 };
     private int[] ydir = new int[] { 1, -1, 0, 0, -1, 1, -1, 1 };

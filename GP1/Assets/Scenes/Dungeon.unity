@@ -987,6 +987,8 @@ MonoBehaviour:
   groundTile: {fileID: 11400000, guid: ed7e408237de64c57abab945a099b673, type: 2}
   doorTile: {fileID: 11400000, guid: 69b2cc5aeacbc1b42a39302389dc4eca, type: 2}
   wallTile: {fileID: 11400000, guid: 81c4b33e3b055d14b9e3e201f9dbb8d7, type: 2}
+  bossGroundTile: {fileID: 11400000, guid: f269861d15e133d4c9fcd50b539cbbb3, type: 2}
+  bossDoorSprite: {fileID: -6979415041820946195, guid: 0eaac95bd8fff44c7a59d19d97b08539, type: 3}
   grid: {fileID: 1814567222}
 --- !u!114 &771426092
 MonoBehaviour:
@@ -1281,7 +1283,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 778f6c3a020906043b9d6fc694152693, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  allMapVisibleMode: 0
+  allMapVisibleMode: 1
   DoNotMoveCameraMode: 1
 --- !u!4 &1695303039
 Transform:
