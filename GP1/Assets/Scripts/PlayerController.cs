@@ -6,10 +6,12 @@ public class PlayerController : MonoBehaviour
 {
     Vector2 velocity;
     Rigidbody2D rigid;
+    Weapon weapon;
 
     void Start()
     {
         rigid = GetComponent<Rigidbody2D>();
+        weapon = transform.Find("Weapon").gameObject.GetComponent<Weapon>();
     }
 
     void FixedUpdate()
@@ -20,5 +22,10 @@ public class PlayerController : MonoBehaviour
     public void Move(Vector3 _velocity)
     {
         velocity = _velocity;
+    }
+
+    public void Attack()
+    {
+        weapon.Fire();
     }
 }

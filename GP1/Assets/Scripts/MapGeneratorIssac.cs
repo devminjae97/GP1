@@ -48,7 +48,6 @@ public class MapGeneratorIssac : MonoBehaviour
     [SerializeField] private GameObject cellParent;
     [SerializeField] private Tilemap groundTilemap;
     [SerializeField] private Tilemap wallTilemap;
-    [SerializeField] private Tilemap minimapTilemap;
     [SerializeField] private TileBase groundTile;
     [SerializeField] private TileBase doorTile;
     [SerializeField] private TileBase wallTile;
@@ -56,7 +55,7 @@ public class MapGeneratorIssac : MonoBehaviour
     [SerializeField] private Sprite bossDoorSprite;
     [SerializeField] private GameObject grid;
     [SerializeField] private Cell[,] cellList;
-    private Dictionary<int, HashSet<int>> roomIDHash = new Dictionary<int, HashSet<int>>();
+    
 
     // 오른쪽, 왼쪽, 아래, 위, 왼쪽아래, 오른쪽아래, 왼쪽위, 오른쪽위
     private int[] xdir = new int[] { 0, 0, 1, -1, 1, 1, -1, -1 };
@@ -100,7 +99,34 @@ public class MapGeneratorIssac : MonoBehaviour
         InitMap();
         GenerateRoom( cellList[ cellList.GetLength( 1 ) / 2, cellList.GetLength( 0 ) / 2 ] );
         InitPlayer();
+        InitMapInvisible();
+    }
 
+    void InitMap()
+    {
+        int cellNum = roomDepth * 4;
+        mapSize = new Vector2Int( cellNum * cellSize, cellNum * cellSize );
+        cellList = new Cell[cellNum, cellNum];
+        tileSizePerCell = cellSize / tileNumPerCell;
+        DungeonManager.GetInstance().tileNumPerCell = tileNumPerCell;
+        DungeonManager.GetInstance().cellSize = cellSize;
+        for (int i = 0; i < cellNum; i++)
+        {
+            for (int j = 0; j < cellNum; j++)
+            {
+                cellList[i, j] = Instantiate( cellObj ).GetComponent<Cell>();
+                cellList[i, j].InitCell( new Vector2Int( i, j ));
+                cellList[i, j].transform.localScale = new Vector3( cellSize, cellSize, 0 );
+                cellList[i, j].transform.position = new Vector3( -mapSize.x / 2 + i * cellSize + cellSize / 2, -mapSize.y / 2 + j * cellSize + cellSize / 2, 10 );
+                cellList[i, j].transform.parent = cellParent.transform;
+                cellList[i, j].tilemapLocalPos = new Vector3Int( -mapSize.x / 2 + tileNumPerCell * i, -mapSize.x / 2 + tileNumPerCell * j, 0 );
+                cellList[i, j].cellSize = cellSize;
+            }
+        }
+    }
+
+    void InitMapInvisible()
+    {
         if (!GameTestManager.GetInstance().allMapVisibleMode)
         {
             for (int id = 2; id < roomID; id++)
@@ -111,32 +137,13 @@ public class MapGeneratorIssac : MonoBehaviour
         }
     }
 
-    void InitMap()
-    {
-        int cellNum = roomDepth * 4;
-        mapSize = new Vector2Int( cellNum * cellSize, cellNum * cellSize );
-        cellList = new Cell[cellNum, cellNum];
-        tileSizePerCell = cellSize / tileNumPerCell;
-        for (int i = 0; i < cellNum; i++)
-        {
-            for (int j = 0; j < cellNum; j++)
-            {
-                cellList[i, j] = Instantiate( cellObj ).GetComponent<Cell>();
-                cellList[i, j].InitCell( new Vector2Int( i, j ));
-                cellList[i, j].transform.localScale = new Vector3( cellSize, cellSize, 0 );
-                cellList[i, j].transform.position = new Vector3( i * cellSize + cellSize / 2 - 100, j * cellSize + cellSize / 2 - 100, 10 );
-                cellList[i, j].transform.parent = cellParent.transform;
-                cellList[i, j].tilemapLocalPos = new Vector3Int( cellList[i, j].pos.x + (tileNumPerCell - 1) * i - 100, cellList[i, j].pos.y + (tileNumPerCell - 1) * j - 100, 0 );
-            }
-        }
-    }
-
     void InitPlayer()
     {
         if (player == null) 
             return;
 
-        DungeonManager.GetInstance().SetPlayerTransform( cellList[roomDepth * 2, roomDepth * 2].transform.position, groundTilemap.cellSize.x * 0.5f);
+        Vector3Int pos = new Vector3Int( tileNumPerCell / 2, tileNumPerCell / 2, 0 );
+        DungeonManager.GetInstance().SetPlayerTransform( groundTilemap.CellToWorld(pos), groundTilemap.cellSize.x * 0.5f);
 
         player.GetComponent<Player>().Speed *= tileSizePerCell * 0.5f * player.transform.localScale.x;
     }
@@ -194,6 +201,10 @@ public class MapGeneratorIssac : MonoBehaviour
         {
             cell.isChecked = true;
             cell.id = roomID;
+            if (isBossCell)
+            {
+                cell.isBossRoom = true;
+            }
         }
 
         SetTileMap( cells );
@@ -205,10 +216,10 @@ public class MapGeneratorIssac : MonoBehaviour
                 ny = cell.pos.y + ydir[i];
                 if (0 < nx && nx <= cellList.GetLength( 1 ) && 0 < ny && ny <= cellList.GetLength( 0 ) && cellList[nx, ny].id != cell.id && cellList[nx, ny].id != 0)
                 {
-                    if (IsInjected( cell, cellList[nx, ny] ))
+                    if (DungeonManager.GetInstance().IsCellAdjacent( cell, cellList[nx, ny] ))
                         continue;
 
-                    AddInjectedID( cell, cellList[nx, ny] );
+                    DungeonManager.GetInstance().AddAdjacentID( cell, cellList[nx, ny] );
 
                     if (i == 0 || i == 2) GenerateDoor( cell, cellList[nx, ny], (EDir)i );
                     else if (i == 1 || i == 3) GenerateDoor( cellList[nx, ny], cell, (EDir)i );
@@ -216,42 +227,6 @@ public class MapGeneratorIssac : MonoBehaviour
                 }
             }
         }
-    }
-
-    bool IsInjected( Cell prevCell, Cell postCell )
-    {
-        return roomIDHash.ContainsKey( prevCell.id ) && roomIDHash[prevCell.id].Contains( postCell.id );
-    }
-
-    void AddInjectedID(Cell prevCell, Cell postCell)
-    {
-        if (roomIDHash.ContainsKey( prevCell.id ))
-        {
-            roomIDHash[prevCell.id].Add( postCell.id );
-        }
-        else
-        {
-            roomIDHash.Add( prevCell.id, new HashSet<int>() { postCell.id } );
-        }
-        if (roomIDHash.ContainsKey( postCell.id ))
-        {
-            roomIDHash[postCell.id].Add( prevCell.id );
-        }
-        else
-        {
-            roomIDHash.Add( postCell.id, new HashSet<int>() { prevCell.id } );
-        }
-    }
-
-    void SetVisibleTile(GameObject tileObj)
-    {
-        SpriteRenderer curSr;
-        curSr = tileObj.GetComponent<SpriteRenderer>();
-
-        if (curSr == null)
-            return;
-
-        curSr.enabled = GameTestManager.GetInstance().allMapVisibleMode;
     }
 
     void SetTileMap( List<Cell> cells )
@@ -363,8 +338,12 @@ public class MapGeneratorIssac : MonoBehaviour
         }
 
         // 방의 중앙값 구하기
-        cell.posWorld = groundTilemap.CellToWorld( new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell / 2, 0 ) );
-        DungeonManager.GetInstance().AddToRoomDic( cell );
+        //cell.posWorld = groundTilemap.CellToWorld( new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell / 2, 0 ) );
+        Vector2 pos = new Vector2 ( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell / 2 );
+        DungeonManager.GetInstance().AddToSameRoomDic( cell );
+
+        // set enemy spawn pos
+        cell.SetSpawnPosList( pos );
     }
 
     void DrawWall( Cell cell, EDir dir )
@@ -439,19 +418,19 @@ public class MapGeneratorIssac : MonoBehaviour
         {
             case EDir.eLeft:
                 pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y );
-                doorInstance.NextDoorPos = pos + new Vector3Int( 0, -1, 0 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 0, -2, 0 );
                 break;
             case EDir.eRight:
                 pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell / 2, cell.tilemapLocalPos.y + tileNumPerCell - 1 );
-                doorInstance.NextDoorPos = pos + new Vector3Int( 0, 1, 0 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 0, 2, 0 );
                 break;
             case EDir.eUp:
                 pos = new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y + tileNumPerCell / 2 );
-                doorInstance.NextDoorPos = pos + new Vector3Int( -1, 0, 0 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( -2, 0, 0 );
                 break;
             case EDir.eDown:
                 pos = new Vector3Int( cell.tilemapLocalPos.x + tileNumPerCell - 1, cell.tilemapLocalPos.y + tileNumPerCell / 2 );
-                doorInstance.NextDoorPos = pos + new Vector3Int( 1, 0, 0 );
+                doorInstance.NextDoorPos = pos + new Vector3Int( 2, 0, 0 );
                 break;
             default:
                 pos = new Vector3Int( 0, 0, 0 );

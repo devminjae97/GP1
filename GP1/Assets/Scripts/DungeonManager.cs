@@ -20,16 +20,22 @@ public class DungeonManager : MonoBehaviour
 {
     private static DungeonManager instance;
 
+    public int enemyCount;
     public int playerRoomID;
+    public int difficulty;
+    public int cellSize;
+    public int tileNumPerCell;
     public Player player;
     public Camera mainCamera;
     public Camera minimapCamera;
-    public Dictionary<int, HashSet<Cell>> roomDic;
     public Cell[,] cellList;
     public Tilemap tilemap;
     public Dictionary<int, List<FTileInfoByCellID>> tilemapDic;
     public Dictionary<int, List<Door>> doorDic;
-
+    public Dictionary<int, HashSet<Cell>> sameRoomDic;  // id, 해당 id의 cell들
+    public Dictionary<int, HashSet<Cell>> adjacentCellDic;  // id, 해당 id와 인접한 cell들
+    public HashSet<int> isRoomVisited;
+    
     private void Awake()
     {
         if (instance == null)
@@ -41,9 +47,11 @@ public class DungeonManager : MonoBehaviour
             Destroy( gameObject );
         }
 
-        roomDic = new Dictionary<int, HashSet<Cell>>();
+        sameRoomDic = new Dictionary<int, HashSet<Cell>>();
         tilemapDic = new Dictionary<int, List<FTileInfoByCellID>>();
         doorDic = new Dictionary<int, List<Door>>();
+        adjacentCellDic = new Dictionary<int, HashSet<Cell>>();
+        isRoomVisited = new HashSet<int>();
     }
 
     public static DungeonManager GetInstance()
@@ -51,15 +59,15 @@ public class DungeonManager : MonoBehaviour
         return instance;
     }
 
-    public void AddToRoomDic(Cell cell)
+    public void AddToSameRoomDic(Cell cell)
     {
-        if (roomDic.ContainsKey(cell.id ))
+        if (sameRoomDic.ContainsKey(cell.id ))
         {
-            roomDic[cell.id].Add( cell );
+            sameRoomDic[cell.id].Add( cell );
         }
         else
         {
-            roomDic.Add( cell.id, new HashSet<Cell>() { cell } );
+            sameRoomDic.Add( cell.id, new HashSet<Cell>() { cell } );
         }
     }
 
@@ -77,15 +85,15 @@ public class DungeonManager : MonoBehaviour
     {
         Vector3 pos = new Vector3( 0, 0, 0 );
 
-        if (!roomDic.ContainsKey( playerRoomID ))
+        if (!sameRoomDic.ContainsKey( playerRoomID ))
             return;
 
-        foreach (Cell cell in roomDic[playerRoomID])
+        foreach (Cell cell in sameRoomDic[playerRoomID])
         {
             pos += cell.transform.position;
         }
 
-        pos /= roomDic[playerRoomID].Count;
+        pos /= sameRoomDic[playerRoomID].Count;
         mainCamera.transform.position = new Vector3( pos.x, pos.y, -10 );
         minimapCamera.transform.position = new Vector3( pos.x, pos.y, -10 );
     }
@@ -159,7 +167,7 @@ public class DungeonManager : MonoBehaviour
 
     public void ActivateMinimap( int id, bool isActivate )
     {
-        foreach(Cell cell in roomDic[id])
+        foreach(Cell cell in sameRoomDic[id])
         {
             SpriteRenderer minimapRenderer = cell.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>();
             cell.isVisited = true;
@@ -176,7 +184,7 @@ public class DungeonManager : MonoBehaviour
 
     public void SetVisibilityMinimap( int id, bool isActivate )
     {
-        foreach (Cell cell in roomDic[id])
+        foreach (Cell cell in sameRoomDic[id])
         {
             SpriteRenderer minimapRenderer = cell.transform.Find( "minimapSprite" ).GetComponent<SpriteRenderer>();
             if (isActivate)
@@ -191,6 +199,110 @@ public class DungeonManager : MonoBehaviour
                 color.a = 0;
                 minimapRenderer.color = color;
             }
+        }
+    }
+
+    public bool IsCellAdjacent( Cell prevCell, Cell postCell )
+    {
+        return adjacentCellDic.ContainsKey( prevCell.id ) && adjacentCellDic[prevCell.id].Contains( postCell );
+    }
+
+    public void AddAdjacentID( Cell prevCell, Cell postCell )
+    {
+        if (adjacentCellDic.ContainsKey( prevCell.id ))
+        {
+            adjacentCellDic[prevCell.id].Add( postCell );
+        }
+        else
+        {
+            adjacentCellDic.Add( prevCell.id, new HashSet<Cell>() { postCell } );
+        }
+        if (adjacentCellDic.ContainsKey( postCell.id ))
+        {
+            adjacentCellDic[postCell.id].Add( prevCell );
+        }
+        else
+        {
+            adjacentCellDic.Add( postCell.id, new HashSet<Cell>() { prevCell } );
+        }
+    }
+
+    public void EnterRoom(bool isBossRoom)
+    {
+        SetDoorEnabled( false );
+        isRoomVisited.Add( playerRoomID );
+        if (isBossRoom)
+        {
+            SetDifficulty();
+            SetBoss();
+        }
+        else
+        {
+            SetDifficulty();
+            SetEnemy();
+        }
+    }
+
+    public void ClearRoom()
+    {
+        SetDoorEnabled( true );
+    }
+
+    public void SetDifficulty()
+    {
+        difficulty++;
+    }
+
+    public void SetEnemy()
+    {
+        Enemy enemy;
+        enemyCount = 0;
+        foreach (Cell cell in sameRoomDic[playerRoomID])
+        {
+            foreach (Vector3 spawnPos in cell.spawnPosList)
+            {
+                enemy = PoolingManager.GetInstance().enemyPool.Get().GetComponent<Enemy>();
+                enemy.transform.position = spawnPos;
+                enemy.SetStat(difficulty);
+                enemy.transform.localScale = tilemap.cellSize * 0.5f;
+                enemyCount++;
+            }
+        }
+    }
+
+    public void SetBoss()
+    {
+        Vector3Int spawnPos = Vector3Int.zero;
+        foreach (Cell cell in sameRoomDic[playerRoomID])
+        {
+            spawnPos += new Vector3Int( cell.tilemapLocalPos.x, cell.tilemapLocalPos.y, 0 );
+        }
+        spawnPos = (spawnPos / sameRoomDic[playerRoomID].Count) + new Vector3Int( tileNumPerCell / 2, tileNumPerCell / 2, 0 );
+
+        Boss boss = PoolingManager.GetInstance().enemyPool.Get().GetComponent<Boss>();
+        boss.enabled = true;
+        boss.GetComponent<Enemy>().enabled = false;
+
+        boss.transform.position = tilemap.CellToWorld( spawnPos );
+        boss.SetStat( difficulty );
+        boss.transform.localScale = tilemap.cellSize;
+    }
+
+    public void AddEnemy(int count)
+    {
+        enemyCount += count;
+        if (enemyCount <= 0)
+        {
+            ClearRoom();
+        }
+    }
+
+    public void SetDoorEnabled(bool isEnabled)
+    {
+        if (!doorDic.ContainsKey( playerRoomID )) return;
+        foreach (Door door in doorDic[playerRoomID])
+        {
+            door.SetDoorEnabled( isEnabled );
         }
     }
 }

@@ -12,10 +12,10 @@ TagManager:
   - Water
   - UI
   - Minimap
-  - 
-  - 
-  - 
-  - 
+  - Player
+  - Enemy
+  - Wall
+  - Bullet
   - 
   - 
   - 
@@ -50,6 +50,15 @@ TagManager:
   - name: Door
     uniqueID: 1241135713
     locked: 0
-  - name: Player
+  - name: Enemy
     uniqueID: 2301256109
+    locked: 0
+  - name: Player
+    uniqueID: 436860011
+    locked: 0
+  - name: Weapon
+    uniqueID: 3748097101
+    locked: 0
+  - name: Bullet
+    uniqueID: 1404720579
     locked: 0

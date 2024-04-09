@@ -8,15 +8,19 @@ using static UnityEditor.Experimental.GraphView.GraphView;
 [Serializable]
 public class Door : CustomTileBase
 {
+    private bool isEnabled = true;
     private bool canCollide = false;
     [SerializeField] private Cell ownerCell;
     [SerializeField] private Door nextDoor;
     [SerializeField] private Vector3Int nextDoorPos;
-    [SerializeField] private SpriteRenderer minimapRenderer;
+    [SerializeField] private Sprite dafaultDoorSprite;
+    [SerializeField] private Sprite disabledDoorSprite;
+    private SpriteRenderer doorSpriteRenderer;
 
     private void Awake()
     {
         boxCollider2D = GetComponent<BoxCollider2D>();
+        doorSpriteRenderer = GetComponent<SpriteRenderer>();
         if (boxCollider2D != null)
         {
             boxCollider2D.enabled = true;
@@ -47,6 +51,11 @@ public class Door : CustomTileBase
                 DungeonManager.GetInstance().ActivateMinimap( nextDoor.ownerCell.id, true );
                 DungeonManager.GetInstance().ActivateMinimap( ownerCell.id, false );
             }
+
+            if (!DungeonManager.GetInstance().isRoomVisited.Contains(nextDoor.ownerCell.id))
+            {
+                DungeonManager.GetInstance().EnterRoom(nextDoor.ownerCell.isBossRoom);
+            }
         }
     }
 
@@ -56,6 +65,21 @@ public class Door : CustomTileBase
         if (player)
         {
             canCollide = false;
+        }
+    }
+
+    public void SetDoorEnabled(bool isEnabled)
+    {
+        this.isEnabled = isEnabled;
+        if (isEnabled)
+        {
+            doorSpriteRenderer.sprite = dafaultDoorSprite;
+            boxCollider2D.isTrigger = true;
+        }
+        else
+        {
+            doorSpriteRenderer.sprite = disabledDoorSprite;
+            boxCollider2D.isTrigger = false;
         }
     }
 
